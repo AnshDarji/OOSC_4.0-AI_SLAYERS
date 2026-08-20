@@ -106,8 +106,8 @@ NYAAY AI's RAG pipeline implements multi-stage processing designed to force exac
 
 ```mermaid
 flowchart TD
-    A([User Query]) --> B{Guardrails (Input Validation)}
-    B -- "Fail" --> C([Fallback Response])
+    A(["User Query"]) --> B{"Guardrails (Input Validation)"}
+    B -- "Fail" --> C(["Fallback Response"])
     B -- "Pass" --> D["Query Rewriting (Gemini 2.5 Flash)"]
     
     D --> E["Domain Classification"]
@@ -117,8 +117,8 @@ flowchart TD
     G -->|query_embedding| F
     
     F{"Hybrid Retriever"}
-    F -->|Dense Top 30| H[(ChromaDB)]
-    F -->|Sparse Top 50| I[(BM25 Index)]
+    F -->|Dense Top 30| H[("ChromaDB")]
+    F -->|Sparse Top 50| I[("BM25 Index")]
     
     H --> J["Reciprocal Rank Fusion (RRF)"]
     I --> J
@@ -131,10 +131,10 @@ flowchart TD
     N --> O["Prompt Builder (Inject System Instructions)"]
     
     O --> P["LLM Generation (Gemini 2.5 Flash/Lite)"]
-    P --> Q{Validator (Length/Hallucination Check)}
+    P --> Q{"Validator (Length/Hallucination Check)"}
     Q -- "Fail" --> P
     Q -- "Pass" --> R["Extract Citations & Reasoning Confidence"]
-    R --> S([Final JSON Response])
+    R --> S(["Final JSON Response"])
 ```
 
 ### 3.1. The Standard RAG Flow (`orchestrator.py`)
