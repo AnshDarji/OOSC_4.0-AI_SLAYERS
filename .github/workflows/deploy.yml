@@ -1,0 +1,24 @@
+name: NYAAY AI Production Deployment
+
+on:
+  push:
+    branches:
+      - main
+
+jobs:
+  build-and-deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v3
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v2
+
+      - name: Docker Compose Build
+        run: docker compose -f docker-compose.yml build
+
+      # Add deployment steps here, e.g., pushing to Docker Hub or AWS ECR,
+      # and triggering a restart on the production server.
+      - name: Deploy Placeholder
+        run: echo "Replace with actual deployment commands (e.g. scp to server, docker pull)"
