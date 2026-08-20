@@ -44,9 +44,10 @@ flowchart TD
 
     %% API Layer
     subgraph APILayer ["API LAYER (FastAPI)"]
+        RateLimit["SlowAPI Rate Limiter"]
         Routes["Endpoints<br/>/api/kanoon, /api/drafting, /api/upload-chat"]
         Middleware["Auth Middleware<br/>(Firebase Admin Token Verification)"]
-        RateLimit["SlowAPI Rate Limiter"]
+        RateLimit --> Routes
         Routes --> Middleware
     end
 
@@ -56,32 +57,32 @@ flowchart TD
         RAGOrch["RAG Orchestrator<br/>(Query Rewrite, Embed, Search, Prompt)"]
         DraftOrch["Drafting Orchestrator<br/>(Intent Classification, Pydantic Schema Gen)"]
         Validator["LLM Validator<br/>(Length, Confidence, Rule Checks)"]
+        Services --> RAGOrch
+        Services --> DraftOrch
+        RAGOrch --> Validator
     end
 
     %% Retrieval & Data
     subgraph DataLayer ["KNOWLEDGE & PERSISTENCE"]
-        Chroma["ChromaDB<br/>(Dense Vector Store)"]
-        BM25["BM25<br/>(Sparse Keyword Index)"]
         SQLite["SQLite (nyaay.db)<br/>(Users, Chats, Docs, Traces)"]
         Embedder["SentenceTransformers<br/>(BAAI/bge-base-en-v1.5)"]
+        Chroma["ChromaDB<br/>(Dense Vector Store)"]
+        BM25["BM25<br/>(Sparse Keyword Index)"]
+        Embedder --> Chroma
     end
 
-    Frontend -- "HTTP/REST + Bearer JWT" --> RateLimit
-    RateLimit --> Routes
+    Gemini((Google Gemini API))
+
+    %% Cross-subgraph connections
+    UI -- "HTTP/REST + Bearer JWT" --> RateLimit
     Routes --> Services
-    Services --> RAGOrch
-    Services --> DraftOrch
     
-    RAGOrch --> Validator
     RAGOrch --> Embedder
-    Embedder --> Chroma
     RAGOrch --> Chroma
     RAGOrch --> BM25
-    
     Services --> SQLite
     
-    %% Gemini API
-    RAGOrch -- "google-genai" --> Gemini((Google Gemini API))
+    RAGOrch -- "google-genai" --> Gemini
     DraftOrch -- "google-genai" --> Gemini
 
     style Frontend fill:#1e40af,color:#fff,stroke:#3b82f6
