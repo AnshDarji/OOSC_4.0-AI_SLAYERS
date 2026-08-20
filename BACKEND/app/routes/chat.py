@@ -3,7 +3,7 @@ from sqlalchemy.orm import Session
 from app.database.database import get_db
 from app.middleware.auth import verify_firebase_token
 from app.models.chat import Conversation, Message
-from app.schemas.chat import ConversationListResponse, MessageListResponse, ConversationRenameRequest, ConversationPinRequest
+from app.schemas.chat import ConversationListResponse, MessageListResponse, ConversationRenameRequest, ConversationPinRequest, FeedbackRequest
 from sqlalchemy import or_
 
 router = APIRouter()
@@ -115,7 +115,7 @@ def delete_conversation(
 @router.post("/messages/{message_id}/feedback", status_code=status.HTTP_200_OK)
 def submit_feedback(
     message_id: str,
-    feedback: dict, # expecting {"is_helpful": "yes"/"no", "category": "..."}
+    feedback: FeedbackRequest,
     user_token: dict = Depends(verify_firebase_token),
     db: Session = Depends(get_db)
 ):
@@ -130,8 +130,8 @@ def submit_feedback(
     if not message:
         raise HTTPException(status_code=404, detail="Message not found")
         
-    message.is_helpful = feedback.get("is_helpful")
-    message.feedback_category = feedback.get("category")
+    message.is_helpful = feedback.is_helpful
+    message.feedback_category = feedback.category
     
     db.commit()
     return {"success": True, "message": "Feedback submitted successfully"}

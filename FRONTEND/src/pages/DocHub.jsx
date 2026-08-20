@@ -14,9 +14,13 @@ import { generateDraft, editDraft, downloadPdf, downloadDocx } from '../services
 
 import Toast from '../components/common/Toast';
 
+import { useAuth } from '../contexts/AuthContext';
+
 
 
 export default function DocHub() {
+
+  const { currentUser } = useAuth();
 
   const [step, setStep] = useState(1);
 
@@ -68,7 +72,9 @@ export default function DocHub() {
 
     try {
 
-      const result = await generateDraft(userFacts, providedFields);
+      const token = await currentUser?.getIdToken(true);
+      if (!token) throw new Error('Please sign in to generate a draft.');
+      const result = await generateDraft(token, userFacts, providedFields);
 
       
 
@@ -91,6 +97,12 @@ export default function DocHub() {
         setDraftResult(result.document_object);
 
         setStep(4); // Professional Preview
+
+      } else if (result.status === "ERROR") {
+
+        setError(result.message || "An error occurred while generating the draft.");
+
+        setStep(1);
 
       } else {
 
@@ -128,7 +140,8 @@ export default function DocHub() {
 
     try {
 
-      const result = await editDraft(draftResult, editInstructions);
+      const token = await currentUser?.getIdToken(true);
+      const result = await editDraft(token, draftResult, editInstructions);
 
       setDraftResult(result);
 
@@ -172,7 +185,8 @@ export default function DocHub() {
 
       setIsToastOpen(true);
 
-      const blob = await downloadPdf(draftResult);
+      const token = await currentUser?.getIdToken(true);
+      const blob = await downloadPdf(token, draftResult);
 
       const url = window.URL.createObjectURL(blob);
 
@@ -208,7 +222,8 @@ export default function DocHub() {
 
       setIsToastOpen(true);
 
-      const blob = await downloadDocx(draftResult);
+      const token = await currentUser?.getIdToken(true);
+      const blob = await downloadDocx(token, draftResult);
 
       const url = window.URL.createObjectURL(blob);
 

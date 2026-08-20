@@ -1,8 +1,10 @@
-from duckduckgo_search import DDGS
-import requests
-from bs4 import BeautifulSoup
-
 def get_kanoon_text(query):
+    # This is a manually-run acquisition utility, not a pytest test. Keep its
+    # optional web-scraping dependencies lazy so they do not break the actual
+    # automated suite when those development tools are not installed.
+    from duckduckgo_search import DDGS
+    import requests
+    from bs4 import BeautifulSoup
     try:
         with DDGS() as ddgs:
             results = ddgs.text(query, max_results=5)

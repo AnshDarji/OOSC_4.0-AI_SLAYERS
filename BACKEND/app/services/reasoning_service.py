@@ -34,6 +34,10 @@ class ReasoningService:
                 Conversation.id == request.conversation_id,
                 Conversation.user_id == user_id
             ).first()
+
+            if conversation and conversation.feature_type != FeatureType.legal_reasoning:
+                from fastapi import HTTPException
+                raise HTTPException(status_code=400, detail="Conversation does not belong to legal reasoning.")
             
         if not conversation:
             # Create a temporary title, can be updated asynchronously later
@@ -60,7 +64,10 @@ class ReasoningService:
         db.commit()
 
         # Trigger the pipeline with REASONING task_type
-        filters = {"tenant_id": request.tenant_id} if request.tenant_id else None
+        # Legal reasoning is limited to the public statutory corpus. Never
+        # trust a client-provided tenant ID here: it could target another
+        # user's uploaded-document namespace.
+        filters = {"tenant_id": "global"}
         
         # Load real history from DB instead of request.history
         past_messages = db.query(Message).filter(Message.conversation_id == conversation.id).order_by(Message.created_at.asc()).all()

@@ -53,7 +53,7 @@ export default function Signup() {
       await signup(email, password, name);
       // Firebase profile is updated with the name, and the user is authenticated.
       // Redirect to /role-selection immediately.
-      navigate('/role-selection');
+      navigate('/dashboard');
     } catch (err) {
       console.error('Signup error:', err);
     } finally {

@@ -1,33 +1,36 @@
 import api from './api';
 
-export const generateDraft = async (userFacts, providedFields = null) => {
+const authHeaders = (token) => ({ Authorization: `Bearer ${token}` });
+
+export const generateDraft = async (token, userFacts, providedFields = null) => {
   try {
     const response = await api.post('/drafting/generate', {
       user_facts: userFacts,
       provided_fields: providedFields
-    });
+    }, { headers: authHeaders(token) });
     return response.data;
   } catch (error) {
     throw error;
   }
 };
 
-export const editDraft = async (documentObject, editInstructions) => {
+export const editDraft = async (token, documentObject, editInstructions) => {
   try {
     const response = await api.post('/drafting/edit', {
       document_object: documentObject,
       edit_instructions: editInstructions
-    });
+    }, { headers: authHeaders(token) });
     return response.data;
   } catch (error) {
     throw error;
   }
 };
 
-export const downloadPdf = async (documentObject) => {
+export const downloadPdf = async (token, documentObject) => {
   try {
     const response = await api.post('/drafting/download/pdf', documentObject, {
-      responseType: 'blob'
+      responseType: 'blob',
+      headers: authHeaders(token)
     });
     return response.data;
   } catch (error) {
@@ -35,10 +38,11 @@ export const downloadPdf = async (documentObject) => {
   }
 };
 
-export const downloadDocx = async (documentObject) => {
+export const downloadDocx = async (token, documentObject) => {
   try {
     const response = await api.post('/drafting/download/docx', documentObject, {
-      responseType: 'blob'
+      responseType: 'blob',
+      headers: authHeaders(token)
     });
     return response.data;
   } catch (error) {

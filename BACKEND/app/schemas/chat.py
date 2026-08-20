@@ -1,5 +1,6 @@
 from pydantic import BaseModel
-from typing import List, Optional, Any
+from typing import List, Optional, Literal
+from pydantic import Field
 from datetime import datetime
 from app.models.chat import FeatureType, MessageRole
 
@@ -16,8 +17,8 @@ class MessageResponse(BaseModel):
         from_attributes = True
 
 class FeedbackRequest(BaseModel):
-    is_helpful: str # "yes" or "no"
-    category: Optional[str] = None
+    is_helpful: Literal["yes", "no"]
+    category: Optional[str] = Field(default=None, max_length=50)
 
     class Config:
         from_attributes = True
@@ -45,7 +46,7 @@ class ConversationResponse(BaseModel):
         from_attributes = True
 
 class ConversationRenameRequest(BaseModel):
-    title: str
+    title: str = Field(..., min_length=1, max_length=100)
 
 class ConversationPinRequest(BaseModel):
     is_pinned: bool

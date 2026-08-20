@@ -31,8 +31,14 @@ export function AuthProvider({ children }) {
       setError(null);
     } catch (err) {
       if (err.response && err.response.status === 404) {
-        // User not found in DB, must do role selection
-        setUserProfile(null);
+        try {
+          const token = fbUser.uid === 'mock-uid' ? 'mock-token' : await fbUser.getIdToken();
+          const profile = await authService.syncUserProfile(token, fbUser.displayName || fbUser.email, 'CITIZEN');
+          setUserProfile(profile);
+          setError(null);
+        } catch (syncErr) {
+          console.error("Failed to auto-sync profile", syncErr);
+        }
       } else {
         console.error('Error fetching backend user profile:', err);
         setError('Failed to sync profile with database.');

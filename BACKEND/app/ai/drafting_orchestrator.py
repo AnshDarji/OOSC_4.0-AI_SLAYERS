@@ -41,16 +41,20 @@ class DraftingOrchestrator:
                 
         return {"schema": schema, "instructions": instructions}
 
-    def classify_intent(self, user_facts: str) -> Dict[str, Any]:
-        sys_prompt = """You are a Legal Drafting Intent Classifier.
+    def classify_intent(self, user_facts: str, mandatory_fields: list = None) -> Dict[str, Any]:
+        fields_hint = ""
+        if mandatory_fields:
+            fields_hint = f"\n\nFor the identified document type, these fields are MANDATORY:\n{json.dumps(mandatory_fields)}\nCarefully check if each mandatory field is clearly stated in the user's facts. If any are missing or ambiguous, list them in 'missing_essential_fields'."
+
+        sys_prompt = f"""You are a Legal Drafting Intent Classifier.
 Analyze the user's facts and determine the correct legal document type.
 Supported types: AFFIDAVIT, POLICE_COMPLAINT, SP_COMPLAINT, LEGAL_NOTICE, CONSUMER_COMPLAINT, RTI_APPLICATION, REPRESENTATION, DECLARATION, INDEMNITY_BOND, POWER_OF_ATTORNEY.
 Respond strictly in JSON format matching this schema:
-{
+{{
   "document_type": "string",
   "missing_essential_fields": ["string"],
   "alternatives": ["string"]
-}"""
+}}{fields_hint}"""
         
         import time
         models_to_try = ['gemini-2.5-flash', 'gemini-2.0-flash', 'gemini-flash-lite-latest']
@@ -148,31 +152,29 @@ Increment the 'metadata.version' by 1.
         return self._generate_with_retry(prompt, sys_prompt)
 
     def trigger_drafting_pipeline(self, user_facts: str, provided_fields: Dict[str, str] = None) -> Dict[str, Any]:
+        # Pass 1: Identify the document type only
         intent_res = self.classify_intent(user_facts)
         doc_type = intent_res.get("document_type", "UNKNOWN")
-        
+
         if doc_type == "UNKNOWN" or not self._get_template_data(doc_type):
             return {
                 "status": "ERROR",
                 "message": "We could not determine a supported legal document type for your request. Please try providing more details or request one of the supported types (e.g., Affidavit, Police Complaint, Legal Notice)."
             }
-            
-        # Override missing fields based on the template registry
+
         template_data = self._get_template_data(doc_type)
-        if template_data:
-            schema_mandatory = template_data["schema"].get("mandatory_fields", [])
-            # For simplicity, if user_facts doesn't explicitly mention it (naive check), prompt for it.
-            # Ideally the LLM intent classification catches it, but we can merge them.
-            missing = intent_res.get("missing_essential_fields", [])
-            # Let's rely on LLM for now, but just know we have the template schema.
-        else:
-            missing = intent_res.get("missing_essential_fields", [])
-        
+        schema_mandatory = template_data["schema"].get("mandatory_fields", [])
+
+        # If the user already provided fields from a previous form submission, inject them
         if provided_fields:
             user_facts += "\n\nAdditional Details:\n" + "\n".join([f"{k}: {v}" for k, v in provided_fields.items()])
-            missing = [] # Proceed to generation since the user provided the requested details
+            missing = []
+        else:
+            # Pass 2: Re-classify with mandatory field knowledge so LLM can accurately detect gaps
+            intent_res2 = self.classify_intent(user_facts, mandatory_fields=schema_mandatory)
+            missing = intent_res2.get("missing_essential_fields", [])
 
-        if missing and doc_type != "UNKNOWN":
+        if missing:
             return {
                 "status": "MISSING_INFO",
                 "document_type": doc_type,

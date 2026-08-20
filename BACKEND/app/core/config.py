@@ -14,7 +14,11 @@ class Settings(BaseSettings):
     # App Settings
     ENVIRONMENT: str = "development"
     GEMINI_API_KEY: str = ""
+    GEMINI_API_KEYS: str = ""
     MIN_RETRIEVAL_THRESHOLD: float = 0.015
+    # Firebase UIDs permitted to view operational metrics. Keep empty by
+    # default so metrics are never exposed accidentally.
+    ADMIN_UIDS: List[str] = []
 
     # CORS Allowed Origins
     # Comma-separated or list of origins. Development defaults provided.

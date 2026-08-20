@@ -28,7 +28,6 @@ class RAGOrchestrator:
         
         # Build prompt from history
         history_text = "Conversation History:\n"
-        # We take only last 2-3 turns to save tokens
         for msg in history[-4:]:
             text_content = msg.get('content') or (msg.get('parts', [{}])[0].get('text', ''))
             history_text += f"{msg['role']}: {text_content}\n"
@@ -117,7 +116,11 @@ class RAGOrchestrator:
                 # Single Regeneration
                 raw_answer, retry_sleep_time2 = self._generate_with_fallback(system_instruction, user_prompt)
                 retry_sleep_time += retry_sleep_time2
-                _, raw_answer = validate_response(raw_answer) # Repair formatting if possible
+                if raw_answer:
+                    is_valid, validated_answer = validate_response(raw_answer)
+                    # Do not return a validator error message as if it were a
+                    # legal answer when the retry also fails validation.
+                    raw_answer = validated_answer if is_valid else None
             else:
                 raw_answer = validated_answer
                 
@@ -245,7 +248,13 @@ class RAGOrchestrator:
         return {
             "answer": message,
             "citations": [],
-            "confidence": "Low",
+            # All API response schemas consume confidence as structured data.
+            # Keeping the fallback shape identical prevents upstream outages
+            # from becoming response-validation 500s.
+            "confidence": {
+                "level": "🔴 Insufficient",
+                "reason": message,
+            },
             "metrics": {}
         }
 

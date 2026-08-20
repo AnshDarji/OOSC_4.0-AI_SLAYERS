@@ -20,8 +20,9 @@ def dummy_pdf():
     if os.path.exists(filepath):
         os.remove(filepath)
 
-def mock_verify_token(*args, **kwargs):
-    return {"uid": "test_user_uid"}
+def mock_verify_token():
+    from app.middleware.auth import VerifiedToken
+    return VerifiedToken(uid="test_user_uid", email="test@nyaay.ai", name="Test User")
 
 from app.middleware.auth import verify_firebase_token
 app.dependency_overrides[verify_firebase_token] = mock_verify_token

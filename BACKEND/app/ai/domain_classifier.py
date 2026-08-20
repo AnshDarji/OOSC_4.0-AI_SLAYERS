@@ -94,6 +94,17 @@ class DomainClassifier:
             if re.search(pattern, query_lower):
                 default_response["is_supported"] = False
                 return default_response
+
+        # A deterministic match is both faster and more reliable than a
+        # second model call. It also keeps the retrieval path available when
+        # the external classifier service is unavailable.
+        rule_domain = self._rule_based_classification(query)
+        if rule_domain != "UNKNOWN":
+            return {
+                "domains": {rule_domain: 0.9},
+                "document_type_priority": "statute" if re.search(r"\b(section|sections|act|code|rule|rules|punishment)\b", query_lower) else "any",
+                "is_supported": True,
+            }
                 
         if not self.client:
             return default_response

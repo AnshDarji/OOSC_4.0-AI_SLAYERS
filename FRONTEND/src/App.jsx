@@ -5,7 +5,6 @@ import ProtectedRoute from './components/common/ProtectedRoute';
 import Landing from './pages/Landing';
 import Login from './pages/Login';
 import Signup from './pages/Signup';
-import RoleSelection from './pages/RoleSelection';
 import Dashboard from './pages/Dashboard';
 import KnowYourKanoon from './pages/KnowYourKanoon';
 import UploadChat from './pages/UploadChat';
@@ -21,7 +20,6 @@ function App() {
           <Route path="/" element={<Landing />} />
           <Route path="/login" element={<Login />} />
           <Route path="/signup" element={<Signup />} />
-          <Route path="/role-selection" element={<RoleSelection />} />
 
           {/* Protected Routes */}
           <Route

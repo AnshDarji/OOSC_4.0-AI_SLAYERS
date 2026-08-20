@@ -32,6 +32,12 @@ class UploadChatService:
                 Conversation.id == request.conversation_id,
                 Conversation.user_id == user_uid
             ).first()
+
+            if conversation and (
+                conversation.feature_type != FeatureType.upload_chat
+                or conversation.document_id != request.document_id
+            ):
+                raise HTTPException(status_code=400, detail="Conversation does not belong to this document chat.")
                         
         if not conversation:
             title = "New Conversation"

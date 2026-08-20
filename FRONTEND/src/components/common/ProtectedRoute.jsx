@@ -21,10 +21,7 @@ export default function ProtectedRoute({ children }) {
     return <Navigate to="/login" replace />;
   }
 
-  // User is authenticated but profile is not synchronized (no role in SQLite) -> redirect to role selection
-  if (!userProfile || !userProfile.role) {
-    return <Navigate to="/role-selection" replace />;
-  }
+
 
   // Authenticated & synced -> render requested content
   return children;

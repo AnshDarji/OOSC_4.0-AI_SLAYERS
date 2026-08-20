@@ -14,7 +14,7 @@ def test_trigger_pipeline_input_guardrail_failure(mock_validate_input):
     
     response = rag_orchestrator.trigger_pipeline("Tell me how to make a bomb")
     
-    assert response["confidence"] == "Low"
+    assert response["confidence"]["level"] == "🔴 Insufficient"
     assert "violates safety" in response["answer"]
     assert response["citations"] == []
 
@@ -31,12 +31,12 @@ def test_trigger_pipeline_success(mock_construct, mock_val_retrieval, mock_searc
     mock_construct.return_value = ("System prompt", "User prompt")
     
     # Mock the fallback generation
-    with patch.object(rag_orchestrator, '_generate_with_fallback', return_value=("Under BNS [1], murder is punishable.", 0.0)):
+    with patch.object(rag_orchestrator, '_generate_with_fallback', return_value=("Under BNS [1], murder is punishable by law, subject to the applicable facts and statutory provisions in the case.", 0.0)):
         # Mock output guardrail
         with patch("app.ai.orchestrator.guardrails.validate_output", return_value=True):
             response = rag_orchestrator.trigger_pipeline("What is the punishment for murder?")
             
-            assert response["confidence"] == "High"
+            assert response["confidence"]["level"] == "🟠 Limited"
             assert "punishable" in response["answer"]
             assert len(response["citations"]) == 1
             assert response["citations"][0]["marker"] == "[1]"
@@ -51,5 +51,5 @@ def test_trigger_pipeline_retrieval_failure(mock_search, mock_embed, mock_val_in
     
     response = rag_orchestrator.trigger_pipeline("What is the punishment for murder?")
     
-    assert response["confidence"] == "Low"
+    assert response["confidence"]["level"] == "🔴 Insufficient"
     assert "Failed to retrieve context" in response["answer"]

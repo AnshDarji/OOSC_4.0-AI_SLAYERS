@@ -1,4 +1,4 @@
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Request
 from fastapi.responses import StreamingResponse
 from pydantic import BaseModel
 from typing import List, Dict, Any, Optional
@@ -6,6 +6,8 @@ from typing import List, Dict, Any, Optional
 from app.ai.drafting_orchestrator import drafting_orchestrator
 from app.schemas.drafting import StructuredDocumentObject
 from app.utils.document_generators import DocumentGenerator
+from app.middleware.auth import VerifiedToken, verify_firebase_token
+from app.core.rate_limit import limiter
 
 router = APIRouter()
 
@@ -18,28 +20,31 @@ class EditRequest(BaseModel):
     edit_instructions: str
 
 @router.post("/generate")
-def generate_draft(request: DraftRequest):
+@limiter.limit("10/minute")
+def generate_draft(request: Request, payload: DraftRequest, _: VerifiedToken = Depends(verify_firebase_token)):
     try:
-        response = drafting_orchestrator.trigger_drafting_pipeline(request.user_facts, request.provided_fields)
+        response = drafting_orchestrator.trigger_drafting_pipeline(payload.user_facts, payload.provided_fields)
         return response
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
 @router.post("/edit", response_model=StructuredDocumentObject)
-def edit_draft(request: EditRequest):
+@limiter.limit("20/minute")
+def edit_draft(request: Request, payload: EditRequest, _: VerifiedToken = Depends(verify_firebase_token)):
     try:
         updated_doc = drafting_orchestrator.edit_document_object(
-            request.document_object.model_dump(),
-            request.edit_instructions
+            payload.document_object.model_dump(),
+            payload.edit_instructions
         )
         # Manually increment version (or rely on LLM to do it, but let's enforce it)
-        updated_doc.metadata.version = request.document_object.metadata.version + 1
+        updated_doc.metadata.version = payload.document_object.metadata.version + 1
         return updated_doc
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
 @router.post("/download/pdf")
-def download_pdf(doc_obj: StructuredDocumentObject):
+@limiter.limit("30/minute")
+def download_pdf(request: Request, doc_obj: StructuredDocumentObject, _: VerifiedToken = Depends(verify_firebase_token)):
     try:
         buffer = DocumentGenerator.generate_pdf(doc_obj)
         return StreamingResponse(
@@ -54,7 +59,8 @@ def download_pdf(doc_obj: StructuredDocumentObject):
         raise HTTPException(status_code=500, detail={"error": "Failed to generate PDF", "reason": str(e)})
 
 @router.post("/download/docx")
-def download_docx(doc_obj: StructuredDocumentObject):
+@limiter.limit("30/minute")
+def download_docx(request: Request, doc_obj: StructuredDocumentObject, _: VerifiedToken = Depends(verify_firebase_token)):
     try:
         buffer = DocumentGenerator.generate_docx(doc_obj)
         return StreamingResponse(

@@ -24,6 +24,9 @@ class KanoonService:
                 Conversation.id == request.conversation_id,
                 Conversation.user_id == user_id
             ).first()
+
+            if conversation and conversation.feature_type != FeatureType.know_kanoon:
+                raise HTTPException(status_code=400, detail="Conversation does not belong to Know Your Kanoon.")
         
         if not conversation:
             title = "New Conversation"

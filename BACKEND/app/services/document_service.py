@@ -1,6 +1,6 @@
 import os
 import uuid
-import shutil
+from pathlib import Path
 import fitz # PyMuPDF
 import docx
 from fastapi import UploadFile, HTTPException
@@ -11,8 +11,9 @@ from app.core.config import settings
 from google import genai
 from google.genai import types
 
-UPLOAD_DIR = "uploads"
-os.makedirs(UPLOAD_DIR, exist_ok=True)
+UPLOAD_DIR = Path(__file__).resolve().parents[2] / "uploads"
+UPLOAD_DIR.mkdir(parents=True, exist_ok=True)
+MAX_UPLOAD_BYTES = 10 * 1024 * 1024
 
 class DocumentService:
     def __init__(self):
@@ -21,19 +22,23 @@ class DocumentService:
 
     def process_upload(self, user_uid: str, file: UploadFile, db: Session) -> DocumentUploadResponse:
         doc_id = str(uuid.uuid4())
-        ext = os.path.splitext(file.filename)[1].lower()
+        original_filename = Path(file.filename or "").name
+        ext = os.path.splitext(original_filename)[1].lower()
         if ext not in [".pdf", ".docx"]:
             raise HTTPException(status_code=400, detail="Unsupported file format. Please upload PDF or DOCX.")
             
-        filepath = os.path.join(UPLOAD_DIR, f"{doc_id}{ext}")
-        with open(filepath, "wb") as buffer:
-            shutil.copyfileobj(file.file, buffer)
-            
-        # Check size limit (10MB)
-        file_size = os.path.getsize(filepath)
-        if file_size > 10 * 1024 * 1024:
-            os.remove(filepath)
-            raise HTTPException(status_code=400, detail="File size exceeds the 10MB limit.")
+        filepath = UPLOAD_DIR / f"{doc_id}{ext}"
+        try:
+            with filepath.open("wb") as buffer:
+                bytes_written = 0
+                while chunk := file.file.read(1024 * 1024):
+                    bytes_written += len(chunk)
+                    if bytes_written > MAX_UPLOAD_BYTES:
+                        raise HTTPException(status_code=400, detail="File size exceeds the 10MB limit.")
+                    buffer.write(chunk)
+        except Exception:
+            filepath.unlink(missing_ok=True)
+            raise
             
         text = ""
         pages = 0
@@ -44,7 +49,7 @@ class DocumentService:
                 pages = len(doc)
                 if pages > 300:
                     doc.close()
-                    os.remove(filepath)
+                    filepath.unlink(missing_ok=True)
                     raise HTTPException(status_code=400, detail="Document exceeds the maximum limit of 300 pages.")
                 for page in doc:
                     text += page.get_text() + "\n"
@@ -57,12 +62,11 @@ class DocumentService:
         except HTTPException:
             raise
         except Exception as e:
-            if os.path.exists(filepath):
-                os.remove(filepath)
+            filepath.unlink(missing_ok=True)
             raise HTTPException(status_code=400, detail=f"Failed to process document: {str(e)}")
             
         if not text.strip():
-            os.remove(filepath)
+            filepath.unlink(missing_ok=True)
             raise HTTPException(status_code=400, detail="Document is empty or text could not be extracted.")
             
         # Generate Summary
@@ -71,8 +75,8 @@ class DocumentService:
         db_doc = Document(
             id=doc_id,
             user_uid=user_uid,
-            filename=file.filename,
-            filepath=filepath,
+            filename=original_filename,
+            filepath=str(filepath),
             pages=pages,
             extracted_text=text,
             summary=summary
@@ -85,7 +89,7 @@ class DocumentService:
         metadata = {
             "document_id": doc_id,
             "document_type": "user_upload",
-            "source_name": file.filename,
+            "source_name": original_filename,
             "tenant_id": user_uid
         }
         try:
@@ -97,7 +101,7 @@ class DocumentService:
         
         return DocumentUploadResponse(
             document_id=doc_id,
-            filename=file.filename,
+            filename=original_filename,
             pages=pages,
             summary=summary
         )
