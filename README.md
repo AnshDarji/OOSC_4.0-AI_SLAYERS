@@ -35,55 +35,53 @@ The application follows a decoupled client-server architecture, cleanly separati
 
 ```mermaid
 flowchart TD
-    %% Frontend
-    subgraph Frontend ["FRONTEND (React 18 + Vite + Tailwind)"]
-        UI["React Router UI<br/>(Dashboard, Kanoon, Upload, Drafting)"]
-        FAuth["Firebase Client Auth"]
-        UI -.-> FAuth
-    end
-
-    %% API Layer
-    subgraph APILayer ["API LAYER (FastAPI)"]
-        RateLimit["SlowAPI Rate Limiter"]
-        Routes["Endpoints<br/>/api/kanoon, /api/drafting, /api/upload-chat"]
-        Middleware["Auth Middleware<br/>(Firebase Admin Token Verification)"]
-        RateLimit --> Routes
-        Routes --> Middleware
-    end
-
-    %% Services & Orchestration
-    subgraph Orchestration ["BUSINESS & AI ORCHESTRATION"]
-        Services["Services<br/>kanoon_svc, upload_svc, document_svc"]
-        RAGOrch["RAG Orchestrator<br/>(Query Rewrite, Embed, Search, Prompt)"]
-        DraftOrch["Drafting Orchestrator<br/>(Intent Classification, Pydantic Schema Gen)"]
-        Validator["LLM Validator<br/>(Length, Confidence, Rule Checks)"]
-        Services --> RAGOrch
-        Services --> DraftOrch
-        RAGOrch --> Validator
-    end
-
-    %% Retrieval & Data
-    subgraph DataLayer ["KNOWLEDGE & PERSISTENCE"]
-        SQLite["SQLite (nyaay.db)<br/>(Users, Chats, Docs, Traces)"]
-        Embedder["SentenceTransformers<br/>(BAAI/bge-base-en-v1.5)"]
-        Chroma["ChromaDB<br/>(Dense Vector Store)"]
-        BM25["BM25<br/>(Sparse Keyword Index)"]
-        Embedder --> Chroma
-    end
-
-    Gemini((Google Gemini API))
-
-    %% Cross-subgraph connections
-    UI -- "HTTP/REST + Bearer JWT" --> RateLimit
-    Routes --> Services
+    %% Define the primary flow top-down
+    UI["React Router UI<br/>(Dashboard, Kanoon, Upload, Drafting)"] -.-> FAuth["Firebase Client Auth"]
+    UI -- "HTTP/REST + Bearer JWT" --> RateLimit["SlowAPI Rate Limiter"]
     
-    RAGOrch --> Embedder
-    RAGOrch --> Chroma
-    RAGOrch --> BM25
-    Services --> SQLite
+    RateLimit --> Routes["Endpoints<br/>/api/kanoon, /api/drafting, /api/upload-chat"]
+    Routes --> Middleware["Auth Middleware<br/>(Firebase Admin Token Verification)"]
+    Routes --> Services["Services<br/>kanoon_svc, upload_svc, document_svc"]
     
-    RAGOrch -- "google-genai" --> Gemini
+    Services --> RAGOrch["RAG Orchestrator<br/>(Query Rewrite, Embed, Search, Prompt)"]
+    Services --> DraftOrch["Drafting Orchestrator<br/>(Intent Classification, Pydantic Schema Gen)"]
+    Services --> SQLite["SQLite (nyaay.db)<br/>(Users, Chats, Docs, Traces)"]
+    
+    RAGOrch --> Validator["LLM Validator<br/>(Length, Confidence, Rule Checks)"]
+    RAGOrch --> Embedder["SentenceTransformers<br/>(BAAI/bge-base-en-v1.5)"]
+    RAGOrch --> Chroma["ChromaDB<br/>(Dense Vector Store)"]
+    RAGOrch --> BM25["BM25<br/>(Sparse Keyword Index)"]
+    
+    Embedder --> Chroma
+    
+    RAGOrch -- "google-genai" --> Gemini((Google Gemini API))
     DraftOrch -- "google-genai" --> Gemini
+
+    %% Group them into Subgraphs afterward
+    subgraph Frontend ["FRONTEND (React 18 + Vite + Tailwind)"]
+        UI
+        FAuth
+    end
+
+    subgraph APILayer ["API LAYER (FastAPI)"]
+        RateLimit
+        Routes
+        Middleware
+    end
+
+    subgraph Orchestration ["BUSINESS & AI ORCHESTRATION"]
+        Services
+        RAGOrch
+        DraftOrch
+        Validator
+    end
+
+    subgraph DataLayer ["KNOWLEDGE & PERSISTENCE"]
+        SQLite
+        Embedder
+        Chroma
+        BM25
+    end
 
     style Frontend fill:#1e40af,color:#fff,stroke:#3b82f6
     style APILayer fill:#0f172a,color:#fff,stroke:#475569
