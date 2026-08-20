@@ -1,4 +1,4 @@
-import React from 'react';
+﻿import React from 'react';
 import ReactMarkdown from 'react-markdown';
 import { Gavel, Info, BookOpen } from 'lucide-react';
 
@@ -15,7 +15,7 @@ const KanoonRenderer = ({ content }) => {
     );
   }
 
-  if (!parsed || !parsed.answer) return null;
+  if (!parsed || (!parsed.answer && !parsed.summary)) return null;
 
   return (
     <div className="space-y-6">
@@ -86,3 +86,4 @@ const KanoonRenderer = ({ content }) => {
 };
 
 export default KanoonRenderer;
+

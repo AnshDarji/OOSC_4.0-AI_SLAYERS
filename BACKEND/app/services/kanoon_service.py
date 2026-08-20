@@ -1,4 +1,4 @@
-import json
+﻿import json
 from google import genai
 from google.genai import types
 from app.core.config import settings
@@ -83,11 +83,17 @@ class KanoonService:
         import re
         
         # Extract the Executive Summary explicitly if it exists
+        # Extract the Executive Summary explicitly if it exists
         exec_summary_match = re.search(r'(?i)##\s*Executive Summary\s*\n(.*?)(?=\n##|\Z)', raw_answer, re.DOTALL)
         if exec_summary_match:
             dynamic_summary = exec_summary_match.group(1).strip()
             # Remove the Executive Summary from the raw_answer to prevent UI duplication
-            raw_answer = raw_answer[:exec_summary_match.start()] + raw_answer[exec_summary_match.end():]
+            new_raw_answer = raw_answer[:exec_summary_match.start()] + raw_answer[exec_summary_match.end():]
+            if new_raw_answer.strip():
+                raw_answer = new_raw_answer.strip()
+            else:
+                # If removing the summary leaves the answer completely empty, put it back or leave it as is
+                raw_answer = dynamic_summary
         else:
             paragraphs = [p.strip() for p in raw_answer.split('\n') if p.strip() and not p.strip().startswith('#')]
             dynamic_summary = paragraphs[0] if paragraphs else "Response generated based on retrieved legal knowledge."
@@ -116,3 +122,4 @@ class KanoonService:
 
 
 kanoon_service = KanoonService()
+
