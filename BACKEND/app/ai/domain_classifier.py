@@ -20,14 +20,17 @@ class DomainClassifier:
         # Rule-based dictionary for fast path
         # Keys are domains, values are lists of regex patterns
         self.rules = {
-            "Real Estate": [r"\brera\b", r"\bbuilder\b", r"\bpossession\b", r"\bapartment\b", r"\bflat\b", r"\bdeveloper\b"],
-            "Consumer Law": [r"\bconsumer\b", r"\bdeficiency\b", r"\bunfair trade\b", r"\bproduct liability\b"],
-            "Criminal Law": [r"\bfir\b", r"\bpolice\b", r"\barrest\b", r"\bbail\b", r"\bmurder\b", r"\btheft\b", r"\bbns\b", r"\bbnss\b"],
-            "Constitutional Law": [r"\bwrit\b", r"\bfundamental right\b", r"\bconstitution\b", r"\barticle 32\b", r"\barticle 226\b"],
-            "Family Law": [r"\bdivorce\b", r"\bmaintenance\b", r"\bchild custody\b", r"\bhindu marriage act\b", r"\balimony\b"],
-            "Corporate Law": [r"\bcompany\b", r"\bshareholder\b", r"\bdirector\b", r"\bincorporation\b", r"\bboard meeting\b"],
-            "Tax Law": [r"\bincometax\b", r"\bgst\b", r"\btax evasion\b", r"\btds\b"],
-            "Contract Law": [r"\bbreach of contract\b", r"\bagreement\b", r"\bindemnity\b", r"\bspecific performance\b"]
+            "Consumer Law": [r"\bconsumer\b", r"\bdefective\b", r"\becommerce\b", r"\be-commerce\b", r"\brefund\b", r"\bwarranty\b", r"\bseller\b", r"\bonline shopping\b", r"\bunfair trade\b", r"\bccpa\b", r"\bncdrc\b", r"\bdistrict forum\b"],
+            "RTI & Transparency": [r"\brti\b", r"\bright to information\b", r"\bpio\b", r"\bpublic information officer\b", r"\bfirst appeal\b", r"\bsecond appeal\b", r"\bcic\b", r"\bsic\b"],
+            "Tenant & Rent Law": [r"\btenant\b", r"\blandlord\b", r"\brent\b", r"\blease\b", r"\beviction\b", r"\bsecurity deposit\b", r"\brent agreement\b", r"\bmodel tenancy\b", r"\bpagdi\b", r"\brent control\b"],
+            "Labour & Employment": [r"\bemployer\b", r"\bemployee\b", r"\bsalary\b", r"\bwages\b", r"\bovertime\b", r"\bpf\b", r"\bprovident fund\b", r"\bgratuity\b", r"\bharassment at workplace\b", r"\bposh\b", r"\btermination\b", r"\bnotice period\b"],
+            "Criminal Law": [r"\bpolice\b", r"\bfir\b", r"\bbail\b", r"\barrest\b", r"\btheft\b", r"\bmurder\b", r"\bassault\b", r"\bbns\b", r"\bbnss\b", r"\bbsa\b", r"\bipc\b", r"\bcrpc\b"],
+            "Constitutional Law": [r"\bfundamental rights\b", r"\bwrit\b", r"\bhigh court\b", r"\bsupreme court\b", r"\bconstitution\b"],
+            "Family Law": [r"\bdivorce\b", r"\bmarriage\b", r"\bmaintenance\b", r"\bchild custody\b", r"\balimony\b", r"\bhindu marriage act\b", r"\bspecial marriage act\b"],
+            "Corporate Law": [r"\bcompany\b", r"\bdirector\b", r"\bshareholder\b", r"\bincorporation\b", r"\bmca\b"],
+            "Tax Law": [r"\bincome tax\b", r"\bgst\b", r"\btds\b", r"\bassessment\b"],
+            "Contract Law": [r"\bcontract\b", r"\bbreach\b", r"\bagreement\b", r"\bspecific performance\b"],
+            "Property Law": [r"\bproperty\b", r"\bsale deed\b", r"\bregistration\b", r"\bmutation\b", r"\bencumbrance\b", r"\btransfer of property\b"]
         }
         
         # Heuristics for unsupported jurisdictions
@@ -106,41 +109,7 @@ class DomainClassifier:
                 "is_supported": True,
             }
                 
-        if not self.client:
-            return default_response
-            
-        sys_prompt = """You are a Legal Domain Classifier for NYAAY AI, an Indian legal platform.
-Determine the primary and secondary legal domains of the user's query, and the preferred document type.
-If the query is asking about non-Indian law (e.g., US Constitution, UK Law) or is completely non-legal, set "is_supported" to false.
-
-Available Domains: Constitutional Law, Education, Civil & Procedural Law, Criminal Law, Banking & Finance, General Law, Environmental Law, Consumer Law, Tax Law, Family Law, Labour & Employment, Contract Law, Intellectual Property, Tenant & Rent, Property Law, Healthcare, Agriculture, Cyber Data & Technology, Test Law.
-
-Output MUST be a valid JSON object matching this schema:
-{
-    "domains": {"Domain Name": confidence_score_between_0_and_1},
-    "document_type_priority": "statute" | "judgment" | "any",
-    "is_supported": true | false
-}
-
-Rules:
-- For 'document_type_priority': if the user asks about rules/sections, use "statute". If they ask about precedents/Supreme Court/interpretation, use "judgment". Otherwise "any".
-- Include up to 3 relevant domains in the 'domains' dict with their respective confidence scores (0.1 to 1.0).
-"""
-        try:
-            res = self.client.models.generate_content(
-                model='gemini-2.5-flash',
-                contents=f"Query: {query}",
-                config=types.GenerateContentConfig(
-                    system_instruction=sys_prompt,
-                    temperature=0.0,
-                    response_mime_type="application/json"
-                )
-            )
-            prediction = json.loads(res.text)
-            logger.info(f"Domain prediction: {prediction}")
-            return prediction
-        except Exception as e:
-            logger.warning(f"LLM Domain Classification failed: {e}")
-            return default_response
+        # If unknown, just return default immediately - save 2s latency and LLM rate limit
+        return default_response
 
 domain_classifier = DomainClassifier()

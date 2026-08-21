@@ -24,8 +24,8 @@ class HybridRetriever:
         self._corpus_cache = {}
 
     def search(self, query: str, query_embedding: List[float], n_results: int = 10, where: Optional[Dict[str, Any]] = None, predicted_domains: Dict[str, float] = None, document_type_priority: str = "any") -> List[Dict[str, Any]]:
-        # 1. Dense Retrieval (ChromaDB) - Broaden to Top 30
-        initial_k = max(30, n_results * 3)
+        # 1. Dense Retrieval (ChromaDB) - Broaden to Top 12 (reduced for latency)
+        initial_k = max(12, int(n_results * 1.5))
         dense_results = vector_store.search(query_embedding, n_results=initial_k, where=where)
         
         # 2. Fetch corpus and BM25 index from Manager
@@ -87,7 +87,7 @@ class HybridRetriever:
             
         # Rank Sparse
         sparse_ranking = sorted(range(len(bm25_scores)), key=lambda i: bm25_scores[i], reverse=True)
-        for rank, idx in enumerate(sparse_ranking[:50]):
+        for rank, idx in enumerate(sparse_ranking[:20]):
             chunk_id = corpus_ids[idx]
             base_rrf = (1.0 / (60 + rank))
             
@@ -117,7 +117,7 @@ class HybridRetriever:
                     break
             
             is_sparse = False
-            for idx in sparse_ranking[:50]:
+            for idx in sparse_ranking[:20]:
                 if corpus_ids[idx] == cid:
                     is_sparse = True
                     break

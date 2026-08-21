@@ -10,7 +10,7 @@ import KnowYourKanoon from './pages/KnowYourKanoon';
 import UploadChat from './pages/UploadChat';
 import DocHub from './pages/DocHub';
 import LegalReasoning from './pages/LegalReasoning';
-
+import CivicNavigator from './pages/CivicNavigator';
 function App() {
   return (
     <Router>
@@ -59,6 +59,14 @@ function App() {
             element={
               <ProtectedRoute>
                 <LegalReasoning />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/civic"
+            element={
+              <ProtectedRoute>
+                <CivicNavigator />
               </ProtectedRoute>
             }
           />

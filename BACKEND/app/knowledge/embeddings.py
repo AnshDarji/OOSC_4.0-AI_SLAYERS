@@ -15,6 +15,12 @@ class EmbeddingService:
         logger.info(f"Embedding service initialized (model loading deferred). device={self.device}")
         self.model = None
         
+    def warmup(self):
+        """Force model loading into memory during startup."""
+        if self.model is None:
+            logger.info(f"Warming up embedding model {self.model_name} on {self.device}...")
+            self.model = SentenceTransformer(self.model_name, device=self.device)
+            logger.info("Embedding model warmed up successfully.")
     def embed_texts(self, texts: List[str]) -> List[List[float]]:
         """Generate embeddings for a list of texts."""
         if not texts:

@@ -24,6 +24,12 @@ async def lifespan(app: FastAPI):
     # Create all tables that do not yet exist (idempotent)
     Base.metadata.create_all(bind=engine)
     logger.info("Database schemas verified")
+    
+    # Pre-warm the embedding model so TTFT isn't 40s on first request
+    from app.knowledge.embeddings import embedding_service
+    embedding_service.warmup()
+    logger.info("Embedding model warmed up and ready")
+    
     yield
     # --- Shutdown --- (nothing to clean up yet)
     logger.info("NYAAY AI Backend shutting down")

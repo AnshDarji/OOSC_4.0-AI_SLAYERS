@@ -48,6 +48,9 @@ export default function Navbar({ fullWidth = false }) {
                 <Link to="/dashboard" className={navLinkStyle('/dashboard')}>
                   Dashboard
                 </Link>
+                <Link to="/civic" className={navLinkStyle('/civic')}>
+                  Civic Navigator
+                </Link>
                 <Link to="/know-your-kanoon" className={navLinkStyle('/know-your-kanoon')}>
                   Kanoon Q&A
                 </Link>

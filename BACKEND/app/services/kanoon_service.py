@@ -1,4 +1,4 @@
-﻿import json
+import json
 from google import genai
 from google.genai import types
 from app.core.config import settings
@@ -120,6 +120,125 @@ class KanoonService:
         return KanoonQueryResponse(conversation_id=conversation.id, **final_json)
 
 
+    def query_stream(self, request: KanoonQueryRequest, user_id: str, db: Session, background_tasks):
+        from app.models.chat import Conversation, Message, FeatureType, MessageRole
+        from app.ai.orchestrator import rag_orchestrator
+        from app.services.title_service import generate_conversation_title_async
+        import json
+        from fastapi import HTTPException
+        
+        conversation = None
+        
+        if request.conversation_id:
+            conversation = db.query(Conversation).filter(
+                Conversation.id == request.conversation_id,
+                Conversation.user_id == user_id
+            ).first()
+
+            if conversation and conversation.feature_type != FeatureType.know_kanoon:
+                raise HTTPException(status_code=400, detail="Conversation does not belong to Know Your Kanoon.")
+        
+        if not conversation:
+            title = "New Conversation"
+            conversation = Conversation(
+                user_id=user_id,
+                title=title,
+                feature_type=FeatureType.know_kanoon
+            )
+            db.add(conversation)
+            db.commit()
+            db.refresh(conversation)
+            
+            background_tasks.add_task(generate_conversation_title_async, conversation.id, request.question)
+
+        # Save User Message
+        user_msg = Message(
+            conversation_id=conversation.id,
+            role=MessageRole.user,
+            content=request.question
+        )
+        db.add(user_msg)
+        db.commit()
+
+        # Load real history
+        past_messages = db.query(Message).filter(Message.conversation_id == conversation.id).order_by(Message.created_at.asc()).all()
+        formatted_history = [{"role": m.role.value, "content": m.content} for m in past_messages[:-1]]
+
+        filters = {"tenant_id": "global"}
+        
+        # Generator for SSE
+        def stream_generator():
+            full_content = ""
+            citations_data = []
+            
+            # Yield conversation ID first so frontend can update URL
+            yield f"data: {json.dumps({'type': 'metadata', 'conversation_id': conversation.id})}\n\n"
+            
+            # Lightweight deterministic acronym expansion for better BM25 recall
+            search_query = request.question
+            expansions = {
+                "RTI": "RTI Right to Information",
+                "FIR": "FIR First Information Report Police",
+                "consumer forum": "consumer dispute redressal",
+                "rera": "Real Estate Regulatory Authority"
+            }
+            import re
+            for acr, exp in expansions.items():
+                search_query = re.sub(rf'\b{acr}\b', exp, search_query, flags=re.IGNORECASE)
+
+            for event in rag_orchestrator.trigger_pipeline_stream(search_query, filters, formatted_history, task_type="CIVIC"):
+                # parse event to accumulate for DB saving
+                if event.startswith("data: "):
+                    try:
+                        data = json.loads(event[6:])
+                        if data['type'] == 'chunk':
+                            full_content += data['data']
+                        elif data['type'] == 'complete':
+                            citations_data = data.get('citations', [])
+                    except:
+                        pass
+                yield event
+                
+            # Once done, save to DB in background
+            # Format the DB payload similar to the non-streaming one
+            import re
+            raw_answer = full_content
+            exec_summary_match = re.search(r'(?i)##\s*Executive Summary\s*\n(.*?)(?=\n##|\Z)', raw_answer, re.DOTALL)
+            if exec_summary_match:
+                dynamic_summary = exec_summary_match.group(1).strip()
+            else:
+                paragraphs = [p.strip() for p in raw_answer.split('\n') if p.strip() and not p.strip().startswith('#')]
+                dynamic_summary = paragraphs[0] if paragraphs else "Response generated based on retrieved legal knowledge."
+                if len(dynamic_summary) > 250:
+                    dynamic_summary = dynamic_summary[:247] + "..."
+            
+            citations_md = "### Source Documents Retrieved\n\n"
+            if not citations_data:
+                citations_md += "No specific legal texts found for this query.\n"
+            else:
+                for cit in citations_data:
+                    source = cit.get("source_name", "Unknown Source")
+                    snippet = cit.get("text_snippet", "").replace('\n', ' ')
+                    citations_md += f"**{cit.get('marker', '')} {source}**: {snippet}\n\n"
+            
+            final_json = {
+                "answer": raw_answer,
+                "summary": dynamic_summary,
+                "similar_cases": citations_md,
+                "disclaimer": "This information is generated by AI based on legal documents.",
+                "category": "General Legal Query"
+            }
+            
+            # Using background tasks might be safer than using the same DB session if the response closed, 
+            # but for this MVP, we save directly with a new session or the existing one.
+            assistant_msg = Message(
+                conversation_id=conversation.id,
+                role=MessageRole.assistant,
+                content=json.dumps(final_json)
+            )
+            db.add(assistant_msg)
+            db.commit()
+
+        return stream_generator()
 
 kanoon_service = KanoonService()
-

@@ -152,45 +152,106 @@ Increment the 'metadata.version' by 1.
         return self._generate_with_retry(prompt, sys_prompt)
 
     def trigger_drafting_pipeline(self, user_facts: str, provided_fields: Dict[str, str] = None) -> Dict[str, Any]:
-        # Pass 1: Identify the document type only
-        intent_res = self.classify_intent(user_facts)
-        doc_type = intent_res.get("document_type", "UNKNOWN")
-
-        if doc_type == "UNKNOWN" or not self._get_template_data(doc_type):
-            return {
-                "status": "ERROR",
-                "message": "We could not determine a supported legal document type for your request. Please try providing more details or request one of the supported types (e.g., Affidavit, Police Complaint, Legal Notice)."
-            }
-
-        template_data = self._get_template_data(doc_type)
-        schema_mandatory = template_data["schema"].get("mandatory_fields", [])
-
         # If the user already provided fields from a previous form submission, inject them
         if provided_fields:
-            user_facts += "\n\nAdditional Details:\n" + "\n".join([f"{k}: {v}" for k, v in provided_fields.items()])
-            missing = []
-        else:
-            # Pass 2: Re-classify with mandatory field knowledge so LLM can accurately detect gaps
-            intent_res2 = self.classify_intent(user_facts, mandatory_fields=schema_mandatory)
-            missing = intent_res2.get("missing_essential_fields", [])
+            user_facts += "\n\nAdditional Details Provided:\n" + "\n".join([f"{k}: {v}" for k, v in provided_fields.items()])
 
-        if missing:
-            return {
-                "status": "MISSING_INFO",
-                "document_type": doc_type,
-                "missing_fields": missing,
-                "alternatives": intent_res.get("alternatives", [])
-            }
+        # 1. Retrieve Context using generic user facts
+        query_embedding = embedding_service.embed_query(user_facts)
+        chunks = hybrid_retriever.search(user_facts, query_embedding, n_results=5)
+        
+        context_str = "RELEVANT LEGAL PROVISIONS:\n"
+        for chunk in chunks:
+            context_str += f"- {chunk.get('document', '')[:300]}...\n"
 
-        search_query = f"Elements and procedures for drafting a {doc_type}. Facts: {user_facts}"
-        query_embedding = embedding_service.embed_query(search_query)
-        chunks = hybrid_retriever.search(search_query, query_embedding, n_results=3)
+        # 2. Load all available templates and their schemas/instructions
+        available_templates = ""
+        for template_name in os.listdir(self.templates_dir):
+            template_data = self._get_template_data(template_name)
+            if template_data:
+                mand = template_data['schema'].get('mandatory_fields', [])
+                available_templates += f"\nTemplate: {template_name.upper()}\n"
+                available_templates += f"Mandatory Fields: {', '.join(mand)}\n"
+                available_templates += f"Instructions: {template_data['instructions'][:200]}...\n"
 
-        doc_obj = self.generate_document_object(user_facts, doc_type, chunks)
+        # 3. Single LLM Call: Classify + Check Missing + Generate
+        sys_prompt = f"""You are a master Legal Draftsman in India.
+Your task is to analyze the user's facts, determine the correct legal document type, identify any missing mandatory fields, and generate the document in a SINGLE pass.
 
-        return {
-            "status": "SUCCESS",
-            "document_object": doc_obj.model_dump()
-        }
+AVAILABLE DOCUMENT TYPES AND RULES:
+{available_templates}
+
+If the user facts miss ANY of the mandatory fields for the chosen template, list them in `missing_essential_fields` and generate the document anyway using placeholders (e.g. [MISSING: NAME]). Do not invent missing facts.
+
+OUTPUT FORMAT:
+You MUST return a JSON object strictly adhering to this schema:
+{{
+  "document_type": "string (the selected template name)",
+  "missing_essential_fields": ["list of strings", "empty if all mandatory fields present"],
+  "document_object": {{
+      // MUST MATCH StructuredDocumentObject Schema exactly
+      "metadata": {{"title": "string", "version": 1, "document_type": "string"}},
+      "parties": [{{"role": "string", "name": "string", "details": "string"}}],
+      "body": [{{"section_title": "string", "content": "string", "is_editable": true}}]
+  }}
+}}
+Do NOT include markdown wrapping like ```json.
+"""
+        import time
+        max_retries = 2
+        for attempt in range(max_retries):
+            try:
+                from app.core.key_rotator import key_rotator
+                temp_client = genai.Client(api_key=key_rotator.get())
+                response = temp_client.models.generate_content(
+                    model='gemini-2.5-flash',
+                    contents=f"User Facts:\n{user_facts}\n\n{context_str}",
+                    config=types.GenerateContentConfig(
+                        system_instruction=sys_prompt,
+                        response_mime_type="application/json",
+                        temperature=0.1
+                    )
+                )
+                
+                raw_json = response.text.strip()
+                if raw_json.startswith("```json"):
+                    raw_json = raw_json[7:-3].strip()
+                elif raw_json.startswith("```"):
+                    raw_json = raw_json[3:-3].strip()
+                    
+                parsed = json.loads(raw_json)
+                
+                doc_type = parsed.get("document_type", "UNKNOWN")
+                missing = parsed.get("missing_essential_fields", [])
+                
+                if doc_type == "UNKNOWN":
+                    return {
+                        "status": "ERROR",
+                        "message": "We could not determine a supported legal document type for your request."
+                    }
+                    
+                if missing and not provided_fields:
+                    return {
+                        "status": "MISSING_INFO",
+                        "document_type": doc_type,
+                        "missing_fields": missing,
+                        "alternatives": []
+                    }
+                    
+                return {
+                    "status": "SUCCESS",
+                    "document_object": parsed.get("document_object", {})
+                }
+                
+            except Exception as e:
+                error_str = str(e)
+                logger.warning(f"Drafting generation attempt {attempt + 1} failed: {error_str}")
+                if attempt < max_retries - 1:
+                    time.sleep(1.0)
+                    continue
+                return {
+                    "status": "ERROR",
+                    "message": "Failed to generate draft due to service overload."
+                }
 
 drafting_orchestrator = DraftingOrchestrator()

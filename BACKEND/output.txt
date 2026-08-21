@@ -1,0 +1,46 @@
+## Executive Summary
+
+*   Landlords in India generally **cannot evict tenants without a legally valid reason**, and specific grounds for eviction are defined by rent control laws, such as those in Maharashtra and Delhi.
+
+*   Common grounds for eviction include non-payment of rent, the landlord's bona fide requirement of the premises for personal use or for repairs/reconstruction, or when a service tenancy ends.
+
+*   The process for eviction typically involves applying to a designated authority, such as a "Competent Authority" under the Maharashtra Rent Control Act or a "Controller" under the Delhi Rent Control Act.
+
+*   Tenants often have certain protections, such as the right to re-occupy premises after repairs or reconstruction, or the ability to prevent eviction for rent arrears by paying the due amount within a specified time.
+
+*   Failure to comply with an eviction order can lead to the authorities taking possession of the premises and delivering it to the landlord, using necessary force if required.
+
+## What the Law Says
+
+A landlord can evict a tenant only under specific conditions defined by the applicable rent control laws, which vary by jurisdiction. The provided authorities highlight provisions from the Maharashtra Rent Control Act, 1999, and the Delhi Rent Control Act, 1958.
+
+**Under the Maharashtra Rent Control Act, 1999:**
+The Act establishes special provisions for certain landlords to seek eviction through a "Competent Authority." These landlords include:
+*   Those who created a service tenancy for an employee (Section 22) [2].
+*   Members of the armed forces, scientists, Government servants, or their successors-in-interest (Section 23) [2].
+*   Persons who have given premises on license for residence or their successors-in-interest (Section 24) [2].
+These landlords may submit an application to the Competent Authority for recovery of possession [2]. If an eviction order issued by the Competent Authority under Section 43 becomes final, and the tenant fails to comply within thirty days, the Competent Authority can evict the person and take possession, using necessary force [1].
+
+Additionally, the Act covers eviction related to repairs and demolition:
+*   If a court passes an eviction decree for repairs, the landlord must commence work within one month and complete it within a reasonable time. The tenant has a right to re-occupy the premises on the same terms and conditions. Failure by the landlord to do so can result in a court order for the tenant's re-occupation and potential penalties for the landlord [5], [6].
+*   If an eviction decree is for demolishing and erecting a new building, the tenant may give notice of their intention to occupy a tenement in the new building upon its completion, subject to certain conditions regarding rent and terms [9]. If the landlord fails to substantially commence demolition work within one month as per their undertaking, the court can order vacant possession to be delivered back to the tenant [6].
+
+**Under the Delhi Rent Control Act, 1958:**
+A landlord may evict a tenant on several grounds, and such proceedings are typically handled by a "Controller." These grounds include:
+*   **Non-payment of rent:** If the tenant is in arrears, but the Controller can prevent eviction if the tenant pays the legally recoverable rent within one month of the order and continues to pay monthly [8].
+*   **Ceased service:** For landlords that are companies, corporate bodies, local authorities, or public institutions, if the premises were let to an employee who has ceased to be in service [4].
+*   **Non-residence:** If the tenant or any family member has not resided in the premises for six months immediately before the application for possession [7].
+*   **Bona fide requirement:** If the landlord genuinely requires the premises for their own residence or for a dependent family member, provided they have no other reasonably suitable residential accommodation [7].
+*   **Unsafe/unfit premises:** If the premises are unsafe or unfit for human habitation and require repairs that cannot be carried out without vacation [7].
+*   **Building/re-building:** If the premises are genuinely required for building, re-building, or making substantial additions/alterations that cannot be carried out without vacation [7].
+
+## Next Steps
+
+1.  **Identify Applicable Law:** Determine whether the Maharashtra Rent Control Act, the Delhi Rent Control Act, or another rent control law applies to your specific location and tenancy agreement.
+2.  **Review Your Lease Agreement:** Understand the terms and conditions outlined in your rental agreement, as these often align with the grounds for eviction permissible under law.
+3.  **Seek Legal Counsel:** Given the complexities of rent control laws, it is advisable to consult a legal professional to understand your rights and obligations specific to your situation.
+
+## Relevant Authorities
+
+*   Maharashtra Rent Control Act, 1999: Sections 18, 19, 41, 42, 43, 45, 46 [1], [2], [5], [6], [9]
+*   Delhi Rent Control Act, 1958: Sections 14, 15, 22 [4], [7], [8]

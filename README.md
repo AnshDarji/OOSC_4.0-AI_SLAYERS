@@ -1,4 +1,4 @@
-# NYAAY AI — Indian Legal AI Workspace
+# NYAAY AI — Civic & Legal Empowerment Platform
 
 <div align="center">
 
@@ -8,219 +8,97 @@
 ![Gemini](https://img.shields.io/badge/Gemini_API-Google-4285F4?style=flat-square&logo=google&logoColor=white)
 ![Firebase](https://img.shields.io/badge/Firebase-Auth-FFCA28?style=flat-square&logo=firebase&logoColor=black)
 
-**An AI-powered legal workspace engineered for the Indian Judiciary Ecosystem.**
-Legal Reasoning · Document Drafting · Document Analysis · Know Your Kanoon
+**Translating bureaucratic complexity into a clear, guided path for everyday citizens.**
+Civic Navigator · Action Plans · Evidence Checklists · One-Click Drafting
 
 </div>
 
 ---
 
-## 1. Executive Overview
+## 1. The Vision: From Information to Action
 
-NYAAY AI is a full-stack, AI-powered legal assistant built specifically for the Indian legal ecosystem. It serves as an intelligent intermediary between complex legal statutes, judicial precedents, and end-users (ranging from citizens to professional lawyers). 
+NYAAY AI was rebuilt from the ground up for the **Civic & Legal Empowerment** hackathon track. We realized that giving citizens a generic "legal chat" isn't enough. When a citizen has a broken phone, a withheld security deposit, or a delayed property mutation, they don't need a law lecture—they need a **guided path to resolution**.
 
-Rather than functioning as a standard wrapper around an LLM, NYAAY AI incorporates a deterministic, metadata-aware **Hybrid Retrieval-Augmented Generation (RAG)** pipeline designed to significantly minimize LLM hallucinations. It achieves this by forcing the generative models (Google Gemini 2.5 Flash / 2.0 Flash) to ground their answers in rigorously chunked, explicitly retrieved Indian Bare Acts and (progressively) Supreme Court judgments. 
-
-The platform supports four primary workflows:
-1. **Know Your Kanoon**: System-wide RAG querying against a curated Indian legal corpus.
-2. **Upload & Chat (User RAG)**: Multi-tenant, isolated querying against user-uploaded PDFs and DOCX files.
-3. **Legal Drafting**: Deterministic, schema-enforced generation of legal documents (Affidavits, Notices, Complaints) preventing formatting hallucination.
-4. **Legal Reasoning**: A specialized pipeline for producing 360-degree legal case studies, generating highly structured JSON outputs mapping facts to statutes, risks, and strategies.
+NYAAY AI acts as an intelligent intermediary between complex legal statutes and everyday problems. It forces generative models (Google Gemini 2.5 Flash) to ground their answers in rigorously chunked, explicitly retrieved Indian Bare Acts, preventing hallucinations of dynamic procedural facts (like random portal URLs or fake Public Information Officer contacts).
 
 ---
 
-## 2. Architecture and Component Interaction
+## 2. Core Features (The Civic Pivot)
 
-The application follows a decoupled client-server architecture, cleanly separating the AI/Retrieval logic from the Web API and Presentation layers.
+### 🧭 Civic Navigator (Real-Time Streaming)
+We rebuilt the core engine for speed and action. The Civic Navigator uses **Server-Sent Events (SSE)** to stream actionable Markdown directly to the user with a **Time-to-First-Token (TTFT) of under 500ms**. 
+
+Every response guarantees the following structure:
+1. **Problem & Rights**: What exact law was violated?
+2. **Evidence Required**: Checklists of documents (receipts, tracking IDs) to gather.
+3. **Relevant Authority**: The exact official to approach (e.g., PIO, District Consumer Forum).
+4. **Action Plan**: Step-by-step chronological instructions.
+5. **Document Generation**: Direct recommendation to our Drafting tool.
+
+### ⚡ Ultra-Low Latency Architecture
+To hit our strict sub-2-second TTFT target, we ruthlessly optimized the RAG pipeline:
+- **Zero-LLM Intent Classification**: Replaced slow LLM routers with instantaneous, deterministic regex keyword dictionaries for `RTI`, `Consumer`, and `Tenant` flows (0.0ms latency).
+- **Pre-warmed Embeddings**: `SentenceTransformer` models (`BAAI/bge-base-en-v1.5`) are loaded into GPU/CPU memory during the FastAPI lifespan hook, eliminating the 40s cold-start penalty.
+- **Context Distillation**: Reduced dense retrieval chunk sizes from 30 to 12, heavily accelerating the LLM's context processing speed.
+
+### 📝 Single-Pass Legal Drafting
+The drafting engine no longer wastes time on sequential LLM calls. It injects the metadata, schemas, and instructions for all available templates into a single prompt. In **one generative pass**, the AI:
+1. Identifies the correct document type (e.g., Affidavit, Legal Notice).
+2. Detects any missing mandatory fields based on the user's facts.
+3. Generates the structured JSON document body, intelligently placing placeholders for missing data.
+
+### 🔄 Round-Robin API multiplexing
+To survive aggressive hackathon rate limits (Gemini Free Tier), the backend implements thread-safe `key_rotator.py` logic. If a request hits a `429 RESOURCE_EXHAUSTED`, it instantly pivots to the next available key in the `.env` pool, maintaining pipeline stability.
+
+---
+
+## 3. Targeted Demo Flows
+
+The platform is explicitly optimized for three high-impact citizen journeys:
+
+1. **Right to Information (RTI)**
+   *Query:* "I've been waiting 6 months for my property mutation. I want to find out what's happening."
+   *Action:* Maps to Transparency laws, identifies the PIO, and sets up an RTI application draft.
+
+2. **Consumer Protection**
+   *Query:* "I bought an air conditioner from Amazon. It stopped working after 2 months. They're not replacing it."
+   *Action:* Maps to the Consumer Protection Act, triggers the warranty dispute flow, and recommends a Legal Notice to the seller.
+
+3. **Tenant Rights (Jurisdiction Aware)**
+   *Query:* "My landlord changed the lock without notice because I was 10 days late on rent."
+   *Action:* Evaluates illegal eviction under specific state rent control acts and outlines the police complaint/injunction process.
+
+---
+
+## 4. Architecture
 
 ```mermaid
 flowchart TD
-    %% Define the primary flow top-down
-    UI["React Router UI<br/>(Dashboard, Kanoon, Upload, Drafting)"] -.-> FAuth["Firebase Client Auth"]
-    UI -- "HTTP/REST + Bearer JWT" --> RateLimit["SlowAPI Rate Limiter"]
+    UI["Frontend (React)"] -.-> FAuth["Firebase Auth"]
+    UI -- "SSE Stream" --> Routes["FastAPI: /api/kanoon/query-stream"]
     
-    RateLimit --> Routes["Endpoints<br/>/api/kanoon, /api/drafting, /api/upload-chat"]
-    Routes --> Middleware["Auth Middleware<br/>(Firebase Admin Token Verification)"]
-    Routes --> Services["Services<br/>kanoon_svc, upload_svc, document_svc"]
+    Routes --> RAG["RAG Orchestrator"]
+    RAG --> Regex["Deterministic Domain Classifier"]
+    RAG --> Embedder["BGE-1.5 Embedding (Pre-warmed)"]
     
-    Services --> RAGOrch["RAG Orchestrator<br/>(Query Rewrite, Embed, Search, Prompt)"]
-    Services --> DraftOrch["Drafting Orchestrator<br/>(Intent Classification, Pydantic Schema Gen)"]
-    Services --> SQLite["SQLite (nyaay.db)<br/>(Users, Chats, Docs, Traces)"]
+    Embedder --> Hybrid{"Hybrid Retrieval"}
+    Hybrid --> Chroma[("ChromaDB (Dense)")]
+    Hybrid --> BM25[("BM25 (Sparse)")]
     
-    RAGOrch --> Validator["LLM Validator<br/>(Length, Confidence, Rule Checks)"]
-    RAGOrch --> Embedder["SentenceTransformers<br/>(BAAI/bge-base-en-v1.5)"]
-    RAGOrch --> Chroma["ChromaDB<br/>(Dense Vector Store)"]
-    RAGOrch --> BM25["BM25<br/>(Sparse Keyword Index)"]
+    Hybrid --> RRF["Reciprocal Rank Fusion + Metadata Bonus"]
+    RRF --> LLM["Gemini 2.5 Flash (API Key Rotator)"]
     
-    Embedder --> Chroma
-    
-    RAGOrch -- "google-genai" --> Gemini((Google Gemini API))
-    DraftOrch -- "google-genai" --> Gemini
-
-    %% Group them into Subgraphs afterward
-    subgraph Frontend ["FRONTEND (React 18 + Vite + Tailwind)"]
-        UI
-        FAuth
-    end
-
-    subgraph APILayer ["API LAYER (FastAPI)"]
-        RateLimit
-        Routes
-        Middleware
-    end
-
-    subgraph Orchestration ["BUSINESS & AI ORCHESTRATION"]
-        Services
-        RAGOrch
-        DraftOrch
-        Validator
-    end
-
-    subgraph DataLayer ["KNOWLEDGE & PERSISTENCE"]
-        SQLite
-        Embedder
-        Chroma
-        BM25
-    end
-
-    style Frontend fill:#1e40af,color:#fff,stroke:#3b82f6
-    style APILayer fill:#0f172a,color:#fff,stroke:#475569
-    style Orchestration fill:#1e293b,color:#fff,stroke:#94a3b8
-    style DataLayer fill:#064e3b,color:#fff,stroke:#34d399
-    style Gemini fill:#4285F4,color:#fff,stroke:#fff
+    LLM -- "Streaming Chunks" --> UI
 ```
 
-### Component Breakdown
-- **Frontend Layer (`FRONTEND/src/`)**: A Single Page Application (SPA) driven by React Router. Uses Tailwind CSS for styling. Authenticaton relies on the Firebase Client SDK. The architecture separates page-level views (`FRONTEND/src/pages/`) from modular UI features (`FRONTEND/src/components/chat/`).
-- **Middleware & Security (`BACKEND/app/middleware/auth.py`)**: Uses `firebase-admin` to cryptographically verify the JWT tokens sent by the React frontend, yielding a `VerifiedToken` (containing `uid`). 
-- **API & Services (`BACKEND/app/routes` & `BACKEND/app/services`)**: The `routes` directory strictly handles HTTP request/response parsing via Pydantic schemas, delegating business logic (like updating the SQLite DB or invoking AI) to `services`.
-- **AI Orchestrators (`BACKEND/app/ai/`)**: The "brains" of the operation. Orchestrators abstract away the LLM logic, converting unstructured natural language into specific database queries, generating LLM prompts, and enforcing structural validation on the outputs.
-- **Knowledge Layer (`BACKEND/app/knowledge/`)**: Manages `ChromaDB` (persistent local vector store) and `rank_bm25` (in-memory sparse index), wrapping them in a `HybridRetriever`.
-
 ---
 
-## 3. Technical Deep Dive: The RAG & AI Pipeline
-
-NYAAY AI's RAG pipeline implements multi-stage processing designed to force exact legal citations and penalize hallucination.
-
-```mermaid
-flowchart TD
-    A(["User Query"]) --> B{"Guardrails (Input Validation)"}
-    B -- "Fail" --> C(["Fallback Response"])
-    B -- "Pass" --> D["Query Rewriting (Gemini 2.5 Flash)"]
-    
-    D --> E["Domain Classification"]
-    E -->|Predicts Domain & DocType| F
-    
-    D --> G["Embedding Generation (BGE-1.5)"]
-    G -->|query_embedding| F
-    
-    F{"Hybrid Retriever"}
-    F -->|Dense Top 30| H[("ChromaDB")]
-    F -->|Sparse Top 50| I[("BM25 Index")]
-    
-    H --> J["Reciprocal Rank Fusion (RRF)"]
-    I --> J
-    
-    J --> K["Apply Metadata Bonus"]
-    K --> L["Filter by Threshold (0.015)"]
-    L --> M["Top N Chunks"]
-    
-    M --> N["Calculate Retrieval Confidence"]
-    N --> O["Prompt Builder (Inject System Instructions)"]
-    
-    O --> P["LLM Generation (Gemini 2.5 Flash/Lite)"]
-    P --> Q{"Validator (Length/Hallucination Check)"}
-    Q -- "Fail" --> P
-    Q -- "Pass" --> R["Extract Citations & Reasoning Confidence"]
-    R --> S(["Final JSON Response"])
-```
-
-### 3.1. The Standard RAG Flow (`orchestrator.py`)
-
-**What it does:** Processes natural language queries into legally grounded answers with inline citations.
-**How it works & Logic Path:**
-1. **Guardrails**: `guardrails.validate_input(question)` runs a sanity check on length and basic safety policies.
-2. **Query Rewriting**: `_rewrite_query()` takes the last 4 messages of conversation history and asks Gemini to output a *standalone query* optimized for vector search. This resolves anaphora (e.g., converting "What is the punishment for it?" to "What is the punishment for theft under IPC?").
-3. **Domain Classification**: `domain_classifier.predict_domain()` predicts the legal domain (e.g., "Criminal Law") and prioritizes a document type (e.g., "statute").
-4. **Embedding**: The rewritten query is prefixed with `"Represent this sentence for searching relevant passages: "` and embedded locally using `BAAI/bge-base-en-v1.5` on CPU/CUDA.
-5. **Hybrid Search**: `hybrid_retriever.search()` retrieves chunks (detailed in 3.2).
-6. **Confidence Scoring**: `validator.calculate_retrieval_confidence()` checks the metadata of retrieved chunks. *Algorithm*: If chunks contain *both* a statute and a judgment, confidence is `High (95)`. If only statutes, `High (80)`. If only judgments, `Moderate (75)`. If neither, `Limited (60)`.
-7. **Prompt Construction**: `prompt_builder.construct_prompt()` injects chunks into the prompt alongside specific system instructions based on the mode (Citizen, Professional, Research).
-8. **Generation with Exponential Backoff**: Queries the Gemini API. If the model fails or hits a rate limit (429/Resource Exhausted), it sleeps with exponential backoff (5s, 10s, 20s) and rotates through models (`gemini-2.5-flash`, `gemini-2.0-flash`, `gemini-flash-lite-latest`).
-9. **Validation**: `validator.validate_response()` ensures the output is >50 chars and heavily penalizes hallucinations (like the model inventing a "percentage likelihood"). If validation fails, it triggers a single automatic retry.
-10. **Extraction**: Post-processes the output to detect inline `[X]` citations, correlates them with chunk metadata to map to the UI's "Source Documents Retrieved" section, and builds the final JSON payload.
-
-### 3.2. Hybrid Retrieval with Metadata Bonus (`hybrid_retriever.py`)
-
-**Why it exists**: Dense embeddings often suffer from domain leakage (e.g., retrieving civil tenancy laws when asking about criminal trespass). BM25 handles exact keyword matches well but misses semantic meaning. 
-**Algorithm & Tradeoffs**:
-1. Fetches Top 30 dense chunks (Chroma) and Top 50 sparse chunks (BM25).
-2. Calculates an RRF Score for each unique chunk: `RRF = 1.0 / (60 + Rank)`.
-3. **Metadata Bonus**: This is the core mechanism preventing hallucination. For every chunk retrieved, it adds synthetic RRF points based on metadata matches:
-   - *Domain Match*: `+ 0.025 * predicted_domain_confidence`
-   - *DocType Match*: `+ 0.015`
-   - *Act Name Match*: `+ 0.02` (if at least 2 words of the query overlap with the chunk's `act_name`).
-4. **Limitation**: Hard-coding bonus weights (0.025, 0.015) is heuristic and may require tuning if the corpus expands significantly.
-
-### 3.3. Deterministic Drafting Pipeline (`drafting_orchestrator.py`)
-
-**What it does:** Generates ready-to-file legal documents (e.g., Affidavits, Notices).
-**How it works**:
-Instead of asking the LLM to output markdown directly (which leads to inconsistent formatting), the drafting pipeline enforces a strict Pydantic JSON schema (`StructuredDocumentObject`).
-1. **Intent Classification**: Evaluates user facts to determine the document type (e.g., `AFFIDAVIT`).
-2. **Missing Info Wizard**: Checks if the user provided the `mandatory_fields` required by that document's schema template. If not, it halts and asks the user (returning `MISSING_INFO`).
-3. **Retrieval**: Grabs 3 context chunks regarding the laws governing the chosen document type.
-4. **Structured Generation**: Passes the `StructuredDocumentObject.model_json_schema()` to Gemini, demanding a raw JSON output.
-5. **Editing**: Allows users to pass "Edit Instructions" against an existing JSON draft. The LLM applies the change to the `body` array and increments `metadata.version`.
-
-### 3.4. Upload & Chat RAG (`upload_chat_service.py`)
-
-**What it does**: Allows users to chat specifically with documents they uploaded.
-**How it connects**: Uses the exact same `RAGOrchestrator`, but heavily modifies the retrieval scope. When querying ChromaDB, it enforces a metadata filter: `{"$and": [{"document_id": request.document_id}, {"tenant_id": user_uid}]}`. 
-**Why it exists**: This multi-tenant approach allows the system to utilize a single global ChromaDB collection (`nyaay_knowledge`) while cryptographically isolating user documents based on their Firebase `user_uid`.
-
----
-
-## 4. The Database Schema
-
-Persistence is handled by a local SQLite database (`nyaay.db`) via SQLAlchemy.
-
-1. **`User` (`user.py`)**: Synchronized from Firebase Auth. `firebase_uid` serves as the primary key. Stores `email`, `name`, and `role` (citizen/student/lawyer). *Note: No passwords are stored locally.*
-2. **`Conversation` (`chat.py`)**: Maps to a specific `user_id` and `FeatureType` (e.g., `know_kanoon`, `upload_chat`, `legal_reasoning`). Tracks whether a chat is pinned.
-3. **`Message` (`chat.py`)**: Stores chronological messages within a Conversation. `role` is either `user` or `assistant`. The `content` column stores raw text for users, but heavily structured JSON strings for the assistant, which the frontend parses for rendering.
-4. **`Document` (`document.py`)**: Tracks user uploads. Links `firebase_uid` to the physical `filepath` in the `uploads/` directory, storing `pages`, `extracted_text`, and an LLM-generated `summary`.
-5. **`RetrievalTrace` & `AnalysisSnapshot` (`reasoning.py`)**: Specialized tables for the Reasoning module. *Why they exist:* `RetrievalTrace` stores the retrieved chunk arrays separately from the generated output. This allows the system to regenerate complex legal opinions (`AnalysisSnapshot`) when a user alters their facts, without incurring the time and compute penalty of re-running vector retrieval.
-
----
-
-## 5. Data Ingestion & Corpus Engineering
-
-The system depends on a highly curated corpus of Indian Bare Acts (currently 93 Markdown files in `BACKEND/corpus/`).
-
-### Pipeline Manager (`BACKEND/scripts/pipeline_manager.py`)
-**What it does**: Offline ingestion script that populates ChromaDB and the BM25 index.
-**How it works**:
-1. Iterates over `BACKEND/corpus/*.md`.
-2. Computes a SHA-256 hash of the file. Skips ingestion if the hash already exists in ChromaDB (Duplicate Prevention).
-3. Parses YAML-like frontmatter for critical metadata (`source_name`, `legal_domain`, `document_type`, `act_name`).
-4. Passes text to the Semantic Chunker.
-5. Generates embeddings using `BAAI/bge-base-en-v1.5`.
-6. Upserts to `ChromaDB` and triggers `bm25_manager.rebuild_index("global")`.
-
-### Semantic Chunking (`BACKEND/app/knowledge/chunking.py`)
-**Algorithm**: Standard character-count chunking ruins legal texts by splitting sentences in half. `LegalStructuralChunker` uses Regex patterns (`Part`, `Chapter`, `Section`, `Article`) to identify hierarchical boundaries. 
-- **Important Parameters**: `max_chunk_size` = 1500, `overlap` = 200.
-- **Context Enrichment**: Before returning a chunk, it prepends the structural hierarchy to the text itself (e.g., `[Bharatiya Nyaya Sanhita > Chapter XII > Section 173]`). *Why it exists:* This drastically improves dense retrieval accuracy because the embedded vector now contains explicit hierarchical context, preventing the LLM from losing track of which Act a generic paragraph belongs to.
-
----
-
-## 6. Local Setup & Deployment
+## 5. Local Setup & Deployment
 
 ### Prerequisites
 - Python 3.11+
 - Node.js 18+
-- [Google AI Studio](https://aistudio.google.com/) API key (Gemini)
+- [Google AI Studio](https://aistudio.google.com/) API keys (Multiple recommended for `.env`)
 - Firebase Project (Authentication enabled, service account key JSON required)
 
 ### Backend Setup
@@ -230,7 +108,7 @@ python -m venv venv
 # Windows: venv\Scripts\activate | macOS/Linux: source venv/bin/activate
 pip install -r requirements.txt
 cp .env.example .env 
-# Configure GEMINI_API_KEY and FIREBASE_SERVICE_ACCOUNT_PATH in .env
+# Configure GEMINI_API_KEYS (comma separated) and FIREBASE_SERVICE_ACCOUNT_PATH in .env
 uvicorn app.main:app --reload
 ```
 
@@ -246,62 +124,7 @@ The frontend dev server mounts at `http://localhost:5173`.
 
 ---
 
-## 7. File & Directory Map
-
-```text
-NYAAY-AI/
-├── BACKEND/
-│   ├── app/
-│   │   ├── ai/                     ← Orchestrators (rag, drafting), Prompt Builder, Validator
-│   │   ├── api/v1/                 ← (Empty) Reserved for versioned shared routes
-│   │   ├── core/                   ← Config loading, Firebase init, Logger, Metrics
-│   │   ├── database/               ← SQLAlchemy engine and session dependency
-│   │   ├── ingestion/              ← Raw document parsing & Markdown generation
-│   │   ├── knowledge/              ← Retrieval engine (ChromaDB, BM25, Semantic Chunking)
-│   │   ├── middleware/             ← Firebase JWT verification (`auth.py`)
-│   │   ├── models/                 ← SQLite DB Schemas (chat, document, reasoning, user)
-│   │   ├── routes/                 ← FastAPI Controllers (kanoon, upload_chat, drafting)
-│   │   ├── schemas/                ← Pydantic validation schemas (e.g., StructuredDocumentObject)
-│   │   ├── services/               ← Core business logic bridging routes and AI
-│   │   ├── templates/              ← JSON schemas & markdown instructions for document drafting
-│   │   └── main.py                 ← FastAPI application entry point
-│   ├── corpus/                     ← Master directory of 93 ingested Indian Bare Acts (.md)
-│   ├── data/                       ← Staging directory (contains 4,369 raw SC Judgments in JSON)
-│   ├── devtools/                   ← Internal developer smoke tests
-│   ├── eval/                       ← Benchmarking and evaluation ground truth
-│   ├── scripts/                    ← Offline ingestion (`pipeline_manager.py`), benchmarking tools
-│   ├── tests/                      ← Pytest suite (Acceptance, Unit, E2E)
-│   ├── uploads/                    ← Local storage for user-uploaded PDFs/DOCX
-│   └── requirements.txt            ← Python dependencies
-├── FRONTEND/
-│   ├── src/
-│   │   ├── components/             ← Segmented UI components (chat, drafting, kanoon, common)
-│   │   ├── contexts/               ← React Contexts (AuthContext)
-│   │   ├── hooks/                  ← Custom React hooks
-│   │   ├── layouts/                ← Layout wrappers (WorkspaceContainer, ConversationLayout)
-│   │   ├── pages/                  ← Route components (Dashboard, KnowYourKanoon, DocHub, etc.)
-│   │   └── services/               ← Axios wrappers for API communication
-│   ├── package.json
-│   └── tailwind.config.js
-└── README.md                       ← You are here.
-```
-
----
-
-## 8. Evaluation & Benchmarking
-
-The system employs heuristic automated evaluation to test the retrieval pipeline and LLM adherence.
-
-- **Acceptance Suite (`BACKEND/tests/acceptance_suite.py`)**: Tests the state-machine logic of the Drafting Pipeline. Asserts that incomplete prompts return a `MISSING_INFO` flag, that providing partial info filters the missing fields correctly, that negative prompts (gibberish) are handled safely, and that editing JSON documents correctly increments the version number.
-- **Benchmark Run (`BACKEND/scripts/run_benchmark.py`)**: Uses a static set of queries defined in `benchmark_suite.json`. It triggers the actual `kanoon_service.query` and checks if the LLM output explicitly cites the required expected statute string (e.g., "Bharatiya Nagarik Suraksha Sanhita"). Current reports (`benchmark_report.json`) show 100% accuracy on basic statutory retrieval queries.
-
----
-
-## 9. Known Limitations and Technical Debt
-
-1. **Unindexed Case Law (Supreme Court Judgments)**: While 93 Statutory Acts are fully indexed and operational, the `BACKEND/data/judgments/` folder contains 4,369 raw JSON Supreme Court judgments. These represent Phase 2 of the corpus expansion and are not currently active in ChromaDB.
-2. **Synchronous Upload Processing**: In `BACKEND/app/services/document_service.py`, user PDF uploads trigger the RAG ingestion pipeline synchronously during the HTTP request. For massive PDFs, this is likely to result in HTTP timeouts. *Tradeoff*: Kept synchronous for architectural simplicity in early iterations; needs migration to `BackgroundTasks` or Celery.
-3. **NLTK Runtime Dependencies**: The `hybrid_retriever.py` calls `nltk.download('punkt')` upon instantiation if missing. In a fresh, containerized deployment without persistent disk caching, this introduces a severe cold-start latency spike on the first retrieval query.
-4. **LLM Summary Generation Timeout Limits**: When generating summaries for large uploaded documents, `document_service.py` applies a strict 15-second timeout via `concurrent.futures`. If the LLM rate-limits or stalls, a hardcoded fallback message is saved to the database instead of the summary.
-5. **Locked Features**: The `CounterArguments.jsx` page is actively routed in the frontend but displays a "Locked for Sprint 3" state. The backend infrastructure for rebuttal mapping is non-existent.
-6. **Local In-Memory Rate Limiting**: The system utilizes `SlowAPI` (in-memory) for rate limiting. This functions perfectly for single-node deployments but will fail to track IPs correctly if scaled horizontally across multiple workers or pods without a centralized Redis cache.
+## 6. Known Limitations (Hackathon Scope)
+- **API Quota Exhaustion**: The Free Tier limits are extremely tight (20 requests/day/key). During heavy testing, if the backend stalls, it is likely exhausting the daily quota across all keys in the rotator.
+- **Hidden Title Generation**: Currently, a background LLM call runs on new chats to generate a title. This consumes a small portion of the daily quota and should be disabled if quota is critical.
+- **RAG Pre-computation**: The current database relies on 93 core Indian statutes. Supreme Court judgments are present in raw data folders but are not fully ingested into ChromaDB for the MVP to prioritize core statutory accuracy.

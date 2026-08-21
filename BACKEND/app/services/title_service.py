@@ -1,43 +1,55 @@
-﻿from app.models.chat import Conversation
+from app.models.chat import Conversation
 from app.database.database import SessionLocal
-from google import genai
-from app.core.config import settings
 import logging
+import re
 
 logger = logging.getLogger(__name__)
 
+def generate_deterministic_title(prompt: str) -> str:
+    """
+    Deterministic local title generator.
+    0 LLM calls, <1ms processing, 5-7 words max.
+    """
+    prompt = prompt.strip()
+    if not prompt:
+        return "New Civic Inquiry"
+        
+    # Rules based on keywords
+    lower_prompt = prompt.lower()
+    if "landlord" in lower_prompt or "rent" in lower_prompt or "tenant" in lower_prompt:
+        if "lock" in lower_prompt or "evict" in lower_prompt:
+            return "Landlord Eviction / Lockout"
+        return "Tenant Rights Inquiry"
+    elif "rti" in lower_prompt or "information" in lower_prompt:
+        return "RTI Application Inquiry"
+    elif "amazon" in lower_prompt or "flipkart" in lower_prompt or "refund" in lower_prompt or "defective" in lower_prompt or "broken" in lower_prompt or "seller" in lower_prompt:
+        return "Consumer Dispute / Refund"
+    elif "salary" in lower_prompt or "employer" in lower_prompt or "work" in lower_prompt:
+        return "Workplace Rights Inquiry"
+    
+    # Fallback: clean up the prompt and take first 5 words
+    cleaned = re.sub(r'[^a-zA-Z0-9\s]', '', prompt)
+    words = cleaned.split()
+    if not words:
+        return "New Civic Inquiry"
+        
+    title = " ".join(words[:5]).title()
+    return title
+
 def generate_conversation_title_async(conversation_id: str, prompt: str):
     """
-    Background task to generate a concise 3-6 word title using the LLM.
+    Background task to generate a title deterministically and save it to the DB.
     """
     try:
-        from app.ai.llm_client import get_api_keys
-        keys = get_api_keys()
-        api_key = keys[0] if keys else "DUMMY_KEY_FOR_TESTING"
-        client = genai.Client(api_key=api_key)
+        new_title = generate_deterministic_title(prompt)
         
-        system_instruction = "You are an AI that generates concise conversation titles. Generate a 3-6 word title based on the user's prompt. Only return the title, no quotes or extra text."
-        
-        response = client.models.generate_content(
-            model='gemini-2.5-flash',
-            contents=prompt,
-            config=genai.types.GenerateContentConfig(
-                system_instruction=system_instruction,
-                temperature=0.3
-            )
-        )
-        
-        new_title = response.text.strip().strip('"')
-        
-        if new_title:
-            db = SessionLocal()
-            try:
-                conversation = db.query(Conversation).filter(Conversation.id == conversation_id).first()
-                if conversation:
-                    conversation.title = new_title
-                    db.commit()
-            finally:
-                db.close()
+        db = SessionLocal()
+        try:
+            conversation = db.query(Conversation).filter(Conversation.id == conversation_id).first()
+            if conversation:
+                conversation.title = new_title
+                db.commit()
+        finally:
+            db.close()
     except Exception as e:
         logger.error(f"Failed to generate title asynchronously: {e}")
-

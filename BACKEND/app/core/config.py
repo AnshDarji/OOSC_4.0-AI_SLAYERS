@@ -15,6 +15,7 @@ class Settings(BaseSettings):
     ENVIRONMENT: str = "development"
     GEMINI_API_KEY: str = ""
     GEMINI_API_KEYS: str = ""
+    CIVIC_MODEL: str = "gemini-flash-lite-latest"
     MIN_RETRIEVAL_THRESHOLD: float = 0.015
     # Firebase UIDs permitted to view operational metrics. Keep empty by
     # default so metrics are never exposed accidentally.

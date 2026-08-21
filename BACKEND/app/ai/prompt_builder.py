@@ -65,6 +65,41 @@ You must strictly ground your legal reasoning in the provided context chunks. Do
 When referencing a law or legal provision from the context, append the citation marker [X] where X is the Chunk ID number.
 Output the entire document in structured Markdown.
 """,
+            "CIVIC": """You are NYAAY AI, a fast Civic & Legal responder.
+Your goal is to give a citizen an actionable path to resolution using ONLY retrieved authorities.
+
+CORE PRINCIPLES:
+1. Move from Information to Action.
+2. NEVER hallucinate procedural facts, deadlines, fees, or portals.
+3. Be jurisdiction-aware based on the context.
+4. Use [X] inline citations for claims.
+
+If the retrieved context is completely irrelevant and you cannot find ANY answer, respond EXACTLY with:
+1. Right Violated / Applicable Right: Context insufficient to determine right.
+2. Evidence: Context insufficient.
+3. Authority: Refer to the jurisdiction-specific procedure.
+4. Action: Please consult a legal professional or the relevant portal.
+5. Document Type: Unknown
+
+Otherwise, STRUCTURE YOUR RESPONSE EXACTLY AS FOLLOWS. KEEP IT ULTRA-CONCISE.
+
+1. Right Violated / Applicable Right:
+State the user's specific right that was violated (Max 1 sentence). Cite relevant Act/Section using [X].
+
+2. Evidence:
+Provide a maximum of 3 bullet points listing documents the user must gather.
+
+3. Authority:
+Name the specific authority to approach (Name only). DO NOT invent an authority if not explicitly stated in context. If unknown, write: "Refer to the authority specified in the cited source."
+
+4. Action:
+Provide a maximum of 3 bullet points listing chronological steps to take.
+
+5. Document Type:
+Name only the recommended document template to use (e.g., RTI Application, Legal Notice).
+
+DO NOT generate long explanations.
+""",
             "REASONING": """You are NYAAY AI, an expert legal reasoning engine and senior legal analyst.
 Your task is to provide a 360-degree, in-depth legal case study and analysis of the user's scenario based strictly on the provided legal context.
 You must objectively analyze all angles, acting as if you are preparing a comprehensive case study for a law firm.
@@ -91,6 +126,88 @@ When making any claim, argument, or referencing a law, append the citation marke
 """
         }
 
+
+    def compress_evidence(self, question: str, chunks: List[Dict[str, Any]], max_chars: int = 3200) -> List[Dict[str, Any]]:
+        '''
+        Deterministically compress evidence to ~800 tokens (3200 chars).
+        1. Deduplicate by content overlap (Jaccard similarity).
+        2. Rank by RRF score + exact phrase match boost.
+        3. Keep full text for top chunks, truncate lower chunks if needed.
+        '''
+        import re
+        
+        # 1. Deduplicate
+        unique_chunks = []
+        seen_texts = set()
+        
+        def get_jaccard(s1, s2):
+            w1 = set(re.findall(r'\w+', s1.lower()))
+            w2 = set(re.findall(r'\w+', s2.lower()))
+            if not w1 or not w2: return 0.0
+            return len(w1.intersection(w2)) / len(w1.union(w2))
+            
+        for chunk in chunks:
+            text = chunk.get("document", "")
+            is_dup = False
+            for seen in seen_texts:
+                if get_jaccard(text, seen) > 0.8:  # 80% word overlap is a duplicate
+                    is_dup = True
+                    break
+            if not is_dup:
+                unique_chunks.append(chunk)
+                seen_texts.add(text)
+                
+        # 2. Score & Rank
+        q_words = set(re.findall(r'\w+', question.lower()))
+        
+        scored_chunks = []
+        for i, chunk in enumerate(unique_chunks):
+            # Base score is RRF position (since they arrive sorted)
+            # Higher is better: 1/(i+1)
+            base_score = 1.0 / (i + 1)
+            
+            text = chunk.get("document", "")
+            t_words = set(re.findall(r'\w+', text.lower()))
+            
+            # Query overlap boost
+            overlap = len(q_words.intersection(t_words))
+            boost = overlap * 0.1
+            
+            final_score = base_score + boost
+            scored_chunks.append((final_score, i, chunk))
+            
+        # Sort by final score descending
+        scored_chunks.sort(key=lambda x: x[0], reverse=True)
+        
+        # 3. Budget allocation (Max 3200 chars ~ 800 tokens)
+        compressed = []
+        current_chars = 0
+        
+        # We need to preserve the original chunk ID (i+1) for citations!
+        # So we return tuples of (original_index, chunk, truncated_text)
+        
+        # Find original indices
+        original_indices = {id(c): idx for idx, c in enumerate(chunks)}
+        
+        for score, _, chunk in scored_chunks:
+            orig_idx = original_indices[id(chunk)]
+            text = chunk.get("document", "")
+            
+            if current_chars + len(text) <= max_chars:
+                compressed.append((orig_idx, chunk, text))
+                current_chars += len(text)
+            else:
+                # Truncate to fit remaining budget, min 100 chars to be useful
+                rem = max_chars - current_chars
+                if rem > 100:
+                    compressed.append((orig_idx, chunk, text[:rem] + "..."))
+                    current_chars += rem
+                break
+                
+        # Re-sort by original index to keep citation numbering chronological
+        compressed.sort(key=lambda x: x[0])
+        return compressed
+
     def construct_prompt(self, question: str, chunks: List[Dict[str, Any]], history: List[Dict[str, Any]] = None, task_type: str = "QA") -> tuple[str, str]:
         """
         Constructs the final prompt.
@@ -99,18 +216,28 @@ When making any claim, argument, or referencing a law, append the citation marke
         system_instruction = self.system_instructions.get(task_type, self.system_instructions["QA"])
         
         context_str = "CONTEXT CHUNKS:\n\n"
-        for i, chunk in enumerate(chunks):
-            # i+1 is the citation index
-            metadata_str = []
-            if "source_name" in chunk["metadata"]:
-                metadata_str.append(f"Source: {chunk['metadata']['source_name']}")
-            if "section" in chunk["metadata"]:
-                metadata_str.append(f"Section: {chunk['metadata']['section']}")
-            if "article" in chunk["metadata"]:
-                metadata_str.append(f"Article: {chunk['metadata']['article']}")
+        
+        if task_type == "CIVIC":
+            compressed = self.compress_evidence(question, chunks, max_chars=3200)
+            for orig_idx, chunk, text in compressed:
+                metadata_str = []
+                if "source_name" in chunk["metadata"]:
+                    metadata_str.append(f"Source: {chunk['metadata']['source_name']}")
+                if "section" in chunk["metadata"]:
+                    metadata_str.append(f"Section: {chunk['metadata']['section']}")
                 
-            meta = ", ".join(metadata_str)
-            context_str += f"--- Chunk [{i+1}] ({meta}) ---\n{chunk['document']}\n\n"
+                meta = ", ".join(metadata_str)
+                context_str += f"--- Chunk [{orig_idx+1}] ({meta}) ---\n{text}\n\n"
+        else:
+            for i, chunk in enumerate(chunks):
+                metadata_str = []
+                if "source_name" in chunk["metadata"]:
+                    metadata_str.append(f"Source: {chunk['metadata']['source_name']}")
+                if "section" in chunk["metadata"]:
+                    metadata_str.append(f"Section: {chunk['metadata']['section']}")
+                    
+                meta = ", ".join(metadata_str)
+                context_str += f"--- Chunk [{i+1}] ({meta}) ---\n{chunk['document']}\n\n"
 
         if task_type == "DRAFTING":
             user_prompt = f"{context_str}\n\n=== USER FACTS & DRAFTING REQUEST ===\n<user_input>\n{question}\n</user_input>\n\n"
