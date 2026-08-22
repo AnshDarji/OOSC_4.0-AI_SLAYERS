@@ -31,11 +31,22 @@ class BM25Manager:
         logger.info(f"Rebuilding BM25 index for tenant: {tenant_id}")
         where = {"tenant_id": tenant_id} if tenant_id != "global" else None
         
+        corpus_docs = []
+        corpus_ids = []
+        corpus_metadatas = []
+        
         try:
             db_docs = vector_store.collection.get(where=where, include=["documents", "metadatas"])
-            corpus_docs = db_docs.get("documents", [])
-            corpus_ids = db_docs.get("ids", [])
-            corpus_metadatas = db_docs.get("metadatas", [])
+            corpus_docs.extend(db_docs.get("documents", []))
+            corpus_ids.extend(db_docs.get("ids", []))
+            corpus_metadatas.extend(db_docs.get("metadatas", []))
+            
+            # Fetch SC cases if global or matching tenant
+            if tenant_id == "global":
+                sc_docs = vector_store.sc_collection.get(include=["documents", "metadatas"])
+                corpus_docs.extend(sc_docs.get("documents", []))
+                corpus_ids.extend(sc_docs.get("ids", []))
+                corpus_metadatas.extend(sc_docs.get("metadatas", []))
         except Exception as e:
             logger.error(f"Failed to fetch corpus for BM25 rebuild: {e}")
             return

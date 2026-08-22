@@ -30,11 +30,15 @@ class EmbeddingService:
             if self.model is None:
                 logger.info(f"Loading embedding model {self.model_name} on {self.device}...")
                 self.model = SentenceTransformer(self.model_name, device=self.device)
+                if self.device == "cpu":
+                    # Optimize for Intel CPU (avoiding oversubscription of E-cores)
+                    torch.set_num_threads(8)
                 logger.info("Embedding model loaded successfully.")
 
             # sentence_transformers encodes batches efficiently under the hood
             # normalize_embeddings=True is recommended for BGE models
-            embeddings = self.model.encode(texts, normalize_embeddings=True)
+            # Using batch_size=8 as requested for stable CPU throughput
+            embeddings = self.model.encode(texts, batch_size=8, normalize_embeddings=True)
             return embeddings.tolist()
 
         except Exception as e:

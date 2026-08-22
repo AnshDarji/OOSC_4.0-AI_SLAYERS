@@ -1,6 +1,7 @@
-﻿import React from 'react';
+import React from 'react';
 import ReactMarkdown from 'react-markdown';
 import { Gavel, Info, BookOpen } from 'lucide-react';
+import ExpandableSource from './ExpandableSource';
 
 const KanoonRenderer = ({ content }) => {
   let parsed = null;
@@ -63,11 +64,23 @@ const KanoonRenderer = ({ content }) => {
       )}
       
       {/* Similar Cases */}
-      {parsed.similar_cases && (
+      {parsed.similar_cases && parsed.similar_cases.length > 0 && (
         <div className="border-t border-slate-200 pt-6">
           <h4 className="font-semibold text-slate-800 mb-3 text-lg">Relevant Precedents</h4>
           <div className="prose prose-sm md:prose-base prose-slate max-w-none text-slate-700">
             <ReactMarkdown>{parsed.similar_cases}</ReactMarkdown>
+          </div>
+        </div>
+      )}
+      
+      {/* Sources */}
+      {parsed.sources && parsed.sources.length > 0 && (
+        <div className="border-t border-slate-200 pt-6">
+          <h4 className="font-semibold text-slate-800 mb-4 text-lg">Sources & Authorities</h4>
+          <div>
+            {parsed.sources.map((source, idx) => (
+              <ExpandableSource key={idx} source={source} />
+            ))}
           </div>
         </div>
       )}

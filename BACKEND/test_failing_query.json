@@ -1,0 +1,56 @@
+{
+  "answer": "### Legal Position\nThe legal position concerning municipal responsibilities is governed by constitutional provisions detailing the powers, authority, and responsibilities of Municipalities, specifically regarding public health, sanitation, conservancy, and solid waste management [1]. While the retrieved text establishes that solid waste management and sanitation fall under the purview of urban planning and municipal functions, the provided knowledge base does not contain specific statutory sections outlining a step-by-step action plan, exact escalation hierarchies, court remedies, or judicial precedents for municipal inaction regarding garbage collection.\n\n### Applicable Law\nConstitution of India \u2014 Article 243W [1].\n\n### Evidence\nArticle 243W enumerates the matters that may be entrusted to Municipalities by the Legislature of a State, which include public health, sanitation conservancy, and solid waste management [1]. \n\n### Application\nThe accumulated waste and sanitation problems described relate directly to the constitutional functions of municipalities concerning \"public health, sanitation conservancy and solid waste management\" [1]. However, because the provided text is limited to Article 243W of the Constitution of India and does not contain procedural rules, local municipal acts, or specific case law regarding enforcement, a detailed step-by-step action plan, court direction mechanisms, or an escalation hierarchy cannot be established from the retrieved authority alone.\n\n### Authority\nConstitution of India, Article 243W [1].\n\n### Available Remedy / Next Step\nThe retrieved provisions do not establish a specific remedy for the facts provided.\n\n### Document Type\nConstitution [1].\n\n### Sources & Authorities\n[1] CONSTITUTION_OF_INDIA \u2014 Section 66A > Article 243W -> Read relevant provision regarding municipal functions including public health, sanitation conservancy, and solid waste management.",
+  "citations": [
+    {
+      "marker": "[1]",
+      "text_snippet": "[CONSTITUTION_OF_INDIA > Section 66A > Article 243W]\nArticle 243W.\n(1)\nUrban planning including town planning.\n(2)\nRegulation of land-use and construc...",
+      "source_name": "CONSTITUTION_OF_INDIA",
+      "article_or_section": "66A",
+      "legal_domain": "Constitutional & Administrative",
+      "retrieval_method": "sparse",
+      "similarity_score": 0.016666666666666666,
+      "retrieval_rank": 2,
+      "chunk_used_by_llm": true,
+      "metadata": {
+        "article": "243W",
+        "document_id": "Constitution_of_India.md",
+        "ingestion_timestamp": 1783113417,
+        "file_hash": "f8b124680100c20c7fdb0c0cc49a256dea99de1a7ec914f202b68cc9e0373a52",
+        "section": "66A",
+        "act_name": "Constitution of India",
+        "legal_domain": "Constitutional & Administrative",
+        "tenant_id": "global",
+        "type": "statute",
+        "source_name": "CONSTITUTION_OF_INDIA",
+        "retrieval_method": "sparse",
+        "retrieval_rank": 2,
+        "rrf_score": 0.016666666666666666
+      },
+      "full_relevant_text": "[CONSTITUTION_OF_INDIA > Section 66A > Article 243W]\nArticle 243W.\n(1)\nUrban planning including town planning.\n(2)\nRegulation of land-use and construction of buildings.\n(3)\nPlanning for economic and social development.\n(4)\nRoads and bridges.\n(5)\nWater supply for domestic, industrial and, commercial purposes.\n(6)\nPublic health, sanitation conservancy and solid waste management.\n(7)\nFire services.\n(8)\nUrban forestry protection of the environment and promotion of ecologicalaspects.\n(9)\nSafeguarding the interests of weaker sections of society, including thehandicapped and mentally retarded.\n(10)\nSlum improvement and upgradation.\n(11)\nUrban poverty alleviation.\n(12)\nProvision of urban amenities and facilities such as parks, gardens,play-grounds.\n(13)\nPromotion of cultural, educational and aesthetic aspects.\n(14)\nBurials and burial grounds; cremations, cremation grounds and electriccrematoriums.\n(15)\nCattle ponds; prevention of cruelty to animals.\n(16)\nVital statistics including registration of births and deaths.\n(17)\nPublic amenities including street lighting, parking lots, bus stops and public conveniences.\n(18)\nRegulation of slaughter houses and tanneries."
+    }
+  ],
+  "confidence": {
+    "level": "\ud83d\udfe0 Limited",
+    "reason": "Only indirect or related authorities were retrieved. The conclusion relies on analogy."
+  },
+  "advanced_metadata": {
+    "authorities_retrieved": 1,
+    "authorities_used": 1,
+    "statutes_used": 0,
+    "sc_judgments_used": 0,
+    "average_retrieval_score": 0.0167,
+    "highest_retrieval_score": 0.0167,
+    "retrieval_time": 23.05,
+    "generation_time": 2.99,
+    "corpus_coverage": "Low",
+    "reasoning_confidence_score": 100
+  },
+  "metrics": {
+    "embedding_time": 5.76,
+    "retrieval_time": 23.05,
+    "prompt_construction_time": 0.0,
+    "model_processing_time": 2.99,
+    "retry_delay_time": 0.0,
+    "total_latency": 39.41
+  }
+}

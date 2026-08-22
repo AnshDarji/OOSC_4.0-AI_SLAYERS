@@ -26,7 +26,7 @@ class HybridRetriever:
     def search(self, query: str, query_embedding: List[float], n_results: int = 10, where: Optional[Dict[str, Any]] = None, predicted_domains: Dict[str, float] = None, document_type_priority: str = "any") -> List[Dict[str, Any]]:
         # 1. Dense Retrieval (ChromaDB) - Broaden to Top 12 (reduced for latency)
         initial_k = max(12, int(n_results * 1.5))
-        dense_results = vector_store.search(query_embedding, n_results=initial_k, where=where)
+        dense_results = vector_store.search(query_embedding, n_results=initial_k, where=where, search_sc=True)
         
         # 2. Fetch corpus and BM25 index from Manager
         tenant_id = "global"
@@ -53,37 +53,28 @@ class HybridRetriever:
         rrf_scores = {}
         predicted_domains = predicted_domains or {}
         
-        # Helper to calculate metadata bonus
-        def calculate_metadata_bonus(metadata: Dict[str, Any]) -> float:
-            bonus = 0.0
+        # Helper to calculate metadata multiplier
+        def calculate_metadata_multiplier(metadata: Dict[str, Any]) -> float:
+            multiplier = 1.0
             
             # Domain Match Bonus (Proportional to LLM confidence)
             chunk_domain = metadata.get("legal_domain", "")
             if chunk_domain in predicted_domains:
-                bonus += 0.025 * predicted_domains[chunk_domain]
+                multiplier += 0.10 * predicted_domains[chunk_domain]
                 
             # Document Type Bonus
             chunk_type = metadata.get("document_type", "")
             if document_type_priority != "any" and chunk_type == document_type_priority:
-                bonus += 0.015
-                
-            # Act Name Keyword Match
-            act_name = metadata.get("act_name", "").lower()
-            if act_name:
-                act_words = set(act_name.split())
-                query_words = set(query.lower().split())
-                # If significant overlap, boost (e.g. "penal code")
-                if len(act_words.intersection(query_words)) >= 2:
-                    bonus += 0.02
+                multiplier += 0.05
                     
-            return bonus
+            return multiplier
         
         # Rank Dense
         for rank, res in enumerate(dense_results):
             chunk_id = res["id"]
             base_rrf = (1.0 / (60 + rank))
-            bonus = calculate_metadata_bonus(res["metadata"])
-            rrf_scores[chunk_id] = rrf_scores.get(chunk_id, 0) + base_rrf + bonus
+            multiplier = calculate_metadata_multiplier(res["metadata"])
+            rrf_scores[chunk_id] = rrf_scores.get(chunk_id, 0) + (base_rrf * multiplier)
             
         # Rank Sparse
         sparse_ranking = sorted(range(len(bm25_scores)), key=lambda i: bm25_scores[i], reverse=True)
@@ -91,17 +82,17 @@ class HybridRetriever:
             chunk_id = corpus_ids[idx]
             base_rrf = (1.0 / (60 + rank))
             
-            # Avoid double-counting the bonus if it was already seen in dense
+            # Avoid double-counting the multiplier if it was already seen in dense
             if chunk_id not in rrf_scores:
-                bonus = calculate_metadata_bonus(corpus_metadatas[idx])
-                rrf_scores[chunk_id] = base_rrf + bonus
+                multiplier = calculate_metadata_multiplier(corpus_metadatas[idx])
+                rrf_scores[chunk_id] = (base_rrf * multiplier)
             else:
-                rrf_scores[chunk_id] += base_rrf
+                rrf_scores[chunk_id] += (base_rrf * multiplier)
             
         # 4. Sort and apply Confidence Threshold
         sorted_rrf = sorted(rrf_scores.items(), key=lambda item: item[1], reverse=True)
         
-        threshold = getattr(settings, "MIN_RETRIEVAL_THRESHOLD", 0.015)
+        threshold = getattr(settings, "MIN_RETRIEVAL_THRESHOLD", 0.005)
         filtered_ids = [item[0] for item in sorted_rrf if item[1] >= threshold]
         
         # Take up to n_results

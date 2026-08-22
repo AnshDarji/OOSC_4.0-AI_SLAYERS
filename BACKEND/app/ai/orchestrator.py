@@ -19,34 +19,99 @@ class RAGOrchestrator:
         # Base client for quick tasks, but we'll use rotator for heavy gen
         self.client = genai.Client(api_key=key_rotator.get())
         
-    def _rewrite_query(self, question: str, history: List[Dict[str, Any]]) -> str:
-        if not history:
-            return question
+    def _analyze_and_expand_query(self, question: str, history: List[Dict[str, Any]]) -> str:
+        sys_prompt = """You are a legal query analyzer. Extract the core legal issue from the user's query and expand it into a comprehensive search query for a legal vector database.
+Include relevant legal concepts, synonyms, and possible statutory frameworks (e.g., if it's about garbage collection, include solid waste management, municipal sanitation duties, public health, administrative inaction, nuisance, etc.).
+DO NOT just repeat the user's text. Extract the true legal problem.
+Output ONLY the expanded search query, nothing else."""
+        
+        history_text = "Conversation History:\\n"
+        if history:
+            for msg in history[-4:]:
+                text_content = msg.get('content') or (msg.get('parts', [{}])[0].get('text', ''))
+                history_text += f"{msg['role']}: {text_content}\\n"
+        else:
+            history_text = "No history."
             
-        sys_prompt = "You are a query rewriter. Given a conversation history and a follow-up question, rewrite the follow-up question to be a standalone query that can be used for searching a vector database. Only output the rewritten query, nothing else."
-        
-        # Build prompt from history
-        history_text = "Conversation History:\n"
-        for msg in history[-4:]:
-            text_content = msg.get('content') or (msg.get('parts', [{}])[0].get('text', ''))
-            history_text += f"{msg['role']}: {text_content}\n"
-        
-        user_prompt = f"{history_text}\nFollow-up question: {question}\nRewritten standalone query:"
+        user_prompt = f"{history_text}\\nUser Query: {question}\\nExpanded Legal Search Query:"
         
         try:
             temp_client = genai.Client(api_key=key_rotator.get())
-            res = temp_client.models.generate_content(
-                model='gemini-2.5-flash',
-                contents=user_prompt,
-                config=types.GenerateContentConfig(system_instruction=sys_prompt)
-            )
-            rewritten = res.text.strip()
-            logger.info(f"Query rewritten: '{question}' -> '{rewritten}'")
-            return rewritten
+            import time
+            for attempt in range(3):
+                try:
+                    res = temp_client.models.generate_content(
+                        model='gemini-2.5-flash',
+                        contents=user_prompt,
+                        config=types.GenerateContentConfig(system_instruction=sys_prompt)
+                    )
+                    break
+                except Exception as e:
+                    if "503" in str(e) and attempt < 2:
+                        time.sleep(2)
+                        continue
+                    raise e
+            expanded = res.text.strip()
+            logger.info(f"Query expanded: '{question}' -> '{expanded}'")
+            return expanded
         except Exception as e:
-            logger.warning(f"Query rewriting failed: {e}")
+            logger.warning(f"Query expansion failed: {e}")
             return question
 
+    def _filter_relevant_chunks(self, question: str, chunks: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
+        if not chunks:
+            return chunks
+            
+        sys_prompt = """You are a Legal Relevance Evaluator for a RAG system.
+Evaluate each retrieved legal document chunk against the user's query.
+
+A chunk is DIRECTLY_APPLICABLE if it directly governs the legal issue.
+A chunk is POTENTIALLY_RELEVANT if it provides useful background law, establishes procedural rules, or contains Supreme Court precedents discussing analogical principles (e.g., writ of mandamus, natural justice, procedural fairness) that could inform the issue.
+A chunk is IRRELEVANT only if it is entirely disconnected from the legal principles at hand (e.g., defining 'local authority' in the RTE Act when the query is about garbage collection).
+
+CRITICAL INSTRUCTION: When in doubt, especially for Constitutional provisions, Supreme Court judgments, or procedural codes (like CrPC/BNS), err on the side of retaining the chunk as POTENTIALLY_RELEVANT. Do not over-filter.
+
+Respond with a valid JSON array of objects, where each object has 'id' (the chunk index provided), 'classification' (one of the 3 labels), and 'reasoning' (a brief explanation)."""
+
+        user_prompt = f"User's Legal Query: {question}\\n\\n"
+        for i, chunk in enumerate(chunks):
+            meta = chunk.get("metadata", {})
+            src = meta.get("source_name", "Unknown")
+            user_prompt += f"--- Chunk ID: {i} | Source: {src} ---\\n{chunk['document'][:800]}\\n\\n"
+            
+        try:
+            temp_client = genai.Client(api_key=key_rotator.get())
+            import time
+            for attempt in range(3):
+                try:
+                    res = temp_client.models.generate_content(
+                        model='gemini-2.5-flash',
+                        contents=user_prompt,
+                        config=types.GenerateContentConfig(
+                            system_instruction=sys_prompt,
+                            response_mime_type="application/json"
+                        )
+                    )
+                    break
+                except Exception as e:
+                    if "503" in str(e) and attempt < 2:
+                        time.sleep(2)
+                        continue
+                    raise e
+            import json
+            classifications = json.loads(res.text)
+            
+            valid_indices = set()
+            for item in classifications:
+                if item.get("classification") in ["DIRECTLY_APPLICABLE", "POTENTIALLY_RELEVANT"]:
+                    valid_indices.add(item.get("id"))
+                    
+            filtered_chunks = [chunks[i] for i in range(len(chunks)) if i in valid_indices]
+            logger.info(f"Filtered chunks from {len(chunks)} down to {len(filtered_chunks)}")
+            return filtered_chunks
+        except Exception as e:
+            logger.warning(f"Relevance filtering failed: {e}")
+            return chunks
     def trigger_pipeline(self, question: str, filters: Dict[str, Any] = None, history: List[Dict[str, Any]] = None, task_type: str = "QA") -> Dict[str, Any]:
         """
         Executes the full RAG pipeline for a given question.
@@ -59,7 +124,7 @@ class RAGOrchestrator:
             return self._fallback_response("Your question violates safety or length policies.")
 
         # 1.5 Conversational Query Rewriting
-        search_query = self._rewrite_query(question, history)
+        search_query = self._analyze_and_expand_query(question, history)
 
         # 2. Embedding
         emb_start = time.time()
@@ -93,6 +158,10 @@ class RAGOrchestrator:
         except Exception as e:
             logger.error(f"Vector search failed: {e}")
             return self._fallback_response("Failed to retrieve context.")
+            
+        # 3.5 LEGAL RELEVANCE GATE
+        chunks = self._filter_relevant_chunks(question, chunks)
+
         retrieval_latency = round(time.time() - retrieval_start, 2)
         
         # Calculate Retrieval Confidence (Python Scoring)
@@ -172,7 +241,8 @@ class RAGOrchestrator:
                     "similarity_score": meta.get("rrf_score", 0.0),
                     "retrieval_rank": meta.get("retrieval_rank", i + 1),
                     "chunk_used_by_llm": True,
-                    "metadata": meta
+                    "metadata": meta,
+                    "full_relevant_text": chunk["document"]
                 })
 
         advanced_metadata = {
@@ -215,7 +285,7 @@ class RAGOrchestrator:
             yield f"data: {json.dumps({'type': 'error', 'data': 'Your question violates safety or length policies.'})}\n\n"
             return
 
-        search_query = self._rewrite_query(question, history)
+        search_query = self._analyze_and_expand_query(question, history)
 
         yield f"data: {json.dumps({'type': 'status', 'data': 'Searching legal corpus...'})}\n\n"
         
@@ -251,6 +321,10 @@ class RAGOrchestrator:
             logger.error(f"Vector search failed: {e}")
             yield f"data: {json.dumps({'type': 'error', 'data': 'Failed to retrieve context.'})}\n\n"
             return
+            
+        # 3.5 LEGAL RELEVANCE GATE
+        chunks = self._filter_relevant_chunks(question, chunks)
+
         retrieval_latency = round(time.time() - retrieval_start, 2)
         
         # EXTRACT DETERMINISTIC METADATA EARLY
@@ -371,7 +445,8 @@ class RAGOrchestrator:
                     "source_name": meta.get("source_name", "Unknown"),
                     "article_or_section": meta.get("section", meta.get("article", "Unknown")),
                     "legal_domain": meta.get("legal_domain", ""),
-                    "metadata": meta
+                    "metadata": meta,
+                    "full_relevant_text": chunk["document"]
                 })
 
         yield f"data: {json.dumps({'type': 'complete', 'citations': citations, 'metrics': metrics})}\n\n"

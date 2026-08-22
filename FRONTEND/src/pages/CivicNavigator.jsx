@@ -8,17 +8,21 @@ import { askCivicStream } from '../services/civicService';
 import { useAuth } from '../contexts/AuthContext';
 import ReactMarkdown from 'react-markdown';
 
+import ExpandableSource from '../components/kanoon/ExpandableSource';
+
 // Component to render the streamed or completed civic response
 const CivicRenderer = ({ content, isStreaming }) => {
   // If it's a completed JSON string, try to parse it. Otherwise, it's raw streamed text.
   let displayContent = content;
   let citations = null;
+  let sources = [];
 
   if (!isStreaming) {
     try {
       const parsed = JSON.parse(content);
       displayContent = parsed.answer || content;
       citations = parsed.similar_cases;
+      sources = parsed.sources || [];
     } catch (e) {
       // It's just text
     }
@@ -30,14 +34,28 @@ const CivicRenderer = ({ content, isStreaming }) => {
         <ReactMarkdown>{displayContent}</ReactMarkdown>
       </div>
       
-      {citations && (
+      {citations && citations.length > 0 && (
         <div className="mt-6 p-4 bg-surface rounded-xl border border-border shadow-sm">
           <div className="flex items-center gap-2 mb-3 text-primary font-medium">
             <Building className="w-5 h-5" />
-            <span>Legal Authorities & Evidence</span>
+            <span>Similar Cases</span>
           </div>
           <div className="prose prose-sm max-w-none text-text-secondary">
             <ReactMarkdown>{citations}</ReactMarkdown>
+          </div>
+        </div>
+      )}
+
+      {sources && sources.length > 0 && (
+        <div className="mt-6">
+          <div className="flex items-center gap-2 mb-4 text-primary font-medium">
+            <Scale className="w-5 h-5" />
+            <span>Sources & Authorities</span>
+          </div>
+          <div>
+            {sources.map((source, idx) => (
+              <ExpandableSource key={idx} source={source} />
+            ))}
           </div>
         </div>
       )}
@@ -98,7 +116,7 @@ const CivicChatArea = ({ refreshConversations }) => {
            // We store the full JSON so it renders citations properly on completion
            const finalJson = JSON.stringify({
                answer: completeData.text,
-               similar_cases: completeData.citations ? completeData.citations.map(c => `**${c.marker} ${c.source_name}**: ${c.text_snippet}`).join('\n\n') : null
+               sources: completeData.citations || []
            });
            setMessages(prev => {
               const newMsgs = [...prev];
